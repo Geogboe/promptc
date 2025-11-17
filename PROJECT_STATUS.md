@@ -10,7 +10,7 @@ promptc is a production-ready, enterprise-grade CLI tool for compiling LLM promp
 
 ✅ **Complete Go Rewrite** - Single binary, zero dependencies
 ✅ **Security Hardened** - CVE-level vulnerabilities fixed
-✅ **Comprehensive Testing** - 80 tests, 6 benchmarks, 96%+ average coverage
+✅ **Comprehensive Testing** - 86 tests (including 6 real-world scenarios), 6 benchmarks, 96%+ average coverage
 ✅ **Production Ready** - Sub-millisecond performance, enterprise security
 
 ---
@@ -88,8 +88,9 @@ internal/resolver       96.9%       11 tests
 internal/targets        96.2%       15 tests
 internal/validator      100.0%      24 tests
 tests (integration)     100%        6 tests
+tests (scenarios)       100%        6 scenario tests
 ------------------------------------------------
-TOTAL                   80 tests    All passing
+TOTAL                   86 tests    All passing
 ```
 
 ### Test Types
@@ -115,7 +116,15 @@ TOTAL                   80 tests    All passing
    - Error handling
    - Multi-import scenarios
 
-4. **Benchmarks** (6 benchmarks)
+4. **Scenario Tests** (6 comprehensive real-world scenarios)
+   - New developer starting web API project (full workflow)
+   - Team shared libraries with overrides
+   - Building app iteratively (step-by-step development)
+   - Multi-file project with different AI targets
+   - Complex import exclusions
+   - Library discovery and nested imports
+
+5. **Benchmarks** (6 benchmarks)
    - Compilation performance
    - Library resolution
    - Validation speed
@@ -255,10 +264,11 @@ promptc/
 ### Testing ✅
 - [x] Unit tests (74)
 - [x] Integration tests (6)
+- [x] Scenario tests (6 comprehensive real-world workflows)
 - [x] Security tests (24)
 - [x] Benchmarks (6)
 - [x] 96%+ average coverage
-- [x] All 80 tests passing
+- [x] All 86 tests passing
 
 ### Performance ✅
 - [x] < 1ms operations (target was 10ms)
@@ -329,7 +339,7 @@ promptc/
 
 ### Key Stats
 
-- **80 Tests**: All passing
+- **86 Tests**: All passing (including 6 real-world scenario tests)
 - **Performance**: 10x better than target
 - **Security**: CVE-level fixes with comprehensive protection
 - **Binary**: 8MB, zero dependencies
