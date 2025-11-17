@@ -1,0 +1,37 @@
+# Database Best Practices
+
+## Schema Design
+- Use proper normalization (usually 3NF for transactional databases)
+- Define foreign key constraints for referential integrity
+- Use appropriate data types (don't store dates as strings)
+- Add indexes on frequently queried columns
+- Use UUIDs or auto-incrementing integers for primary keys
+
+## Query Optimization
+- Use query parameters to prevent SQL injection
+- Avoid SELECT * - specify only needed columns
+- Use JOINs efficiently and understand different join types
+- Add indexes for WHERE clauses and JOIN conditions
+- Use EXPLAIN/ANALYZE to understand query performance
+- Implement pagination for large result sets
+
+## Transactions
+- Use transactions for operations that must be atomic
+- Keep transactions short to avoid locks
+- Understand isolation levels and use appropriate level
+- Handle transaction rollback on errors
+- Use database connection pooling
+
+## Migrations
+- Version all database schema changes
+- Make migrations reversible when possible
+- Test migrations on staging before production
+- Never modify existing migrations in production
+- Back up data before running migrations
+
+## Performance
+- Use caching strategically (Redis, Memcached)
+- Implement read replicas for read-heavy workloads
+- Archive old data to keep tables smaller
+- Monitor slow queries and optimize them
+- Use database-specific features wisely (stored procedures, triggers)

@@ -1,0 +1,28 @@
+# Security Constraints
+
+## Authentication & Authorization
+- Never hardcode credentials, API keys, or secrets
+- Use environment variables for sensitive configuration
+- Implement proper authentication for all protected endpoints
+- Use principle of least privilege for authorization
+- Implement session timeout and token expiration
+
+## Input Validation
+- Validate and sanitize all user inputs
+- Use parameterized queries to prevent SQL injection
+- Escape output to prevent XSS attacks
+- Validate file uploads (type, size, content)
+- Implement rate limiting to prevent abuse
+
+## Data Protection
+- Encrypt sensitive data at rest
+- Use TLS/HTTPS for data in transit
+- Never log sensitive information (passwords, tokens, PII)
+- Implement secure password hashing (bcrypt, argon2)
+- Follow GDPR/privacy regulations for user data
+
+## Error Handling
+- Don't expose internal errors to users
+- Log errors securely for debugging
+- Use generic error messages for authentication failures
+- Implement proper CORS policies
