@@ -116,9 +116,19 @@ func (c *Compiler) Compile(promptFile string, opts *CompileOptions) (string, err
 }
 
 func (c *Compiler) loadSpec(promptFile string) (map[string]interface{}, error) {
-	// Check if file exists
-	if _, err := os.Stat(promptFile); os.IsNotExist(err) {
+	// Check if file exists and get file info
+	fileInfo, err := os.Stat(promptFile)
+	if os.IsNotExist(err) {
 		return nil, fmt.Errorf("prompt file not found: %s", promptFile)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat prompt file: %w", err)
+	}
+
+	// Prevent YAML bombs and memory exhaustion with file size limit
+	const maxPromptFileSize = 1 * 1024 * 1024 // 1MB limit for .prompt files
+	if fileInfo.Size() > maxPromptFileSize {
+		return nil, fmt.Errorf("prompt file too large: %d bytes (max %d bytes)", fileInfo.Size(), maxPromptFileSize)
 	}
 
 	// Read file
