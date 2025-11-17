@@ -81,3 +81,62 @@ class LibraryManager:
             )
 
         return path.read_text(encoding="utf-8")
+
+    def list_libraries(self) -> dict:
+        """
+        List all available prompt libraries organized by source.
+
+        Returns:
+            Dictionary with sources as keys and lists of libraries as values
+        """
+        libraries = {
+            "project": [],
+            "global": [],
+            "built-in": []
+        }
+
+        for search_path in self.search_paths:
+            source_key = self._get_source_key(search_path)
+            libs = self._scan_directory(search_path)
+            libraries[source_key].extend(libs)
+
+        return libraries
+
+    def _get_source_key(self, path: Path) -> str:
+        """Get the source key for a search path."""
+        if "defaults" in str(path):
+            return "built-in"
+        elif path.name == "prompts" and path.parent == self.project_dir:
+            return "project"
+        else:
+            return "global"
+
+    def _scan_directory(self, base_path: Path, prefix: str = "") -> List[str]:
+        """
+        Recursively scan directory for .prompt files.
+
+        Args:
+            base_path: Base directory to scan
+            prefix: Prefix for library names (for nested directories)
+
+        Returns:
+            List of library import names
+        """
+        libraries = []
+
+        if not base_path.exists():
+            return libraries
+
+        for item in sorted(base_path.iterdir()):
+            if item.is_file() and item.suffix == ".prompt":
+                # Convert to import name
+                lib_name = item.stem
+                if prefix:
+                    lib_name = f"{prefix}.{lib_name}"
+                libraries.append(lib_name)
+            elif item.is_dir() and not item.name.startswith("."):
+                # Recursively scan subdirectories
+                subdir_prefix = item.name if not prefix else f"{prefix}.{item.name}"
+                libraries.extend(self._scan_directory(item, subdir_prefix))
+
+        return libraries
