@@ -1,0 +1,25 @@
+# Testing Best Practices
+
+## Test Structure
+- Follow the Arrange-Act-Assert (AAA) pattern
+- Write descriptive test names that explain what is being tested
+- One assertion per test when possible
+- Use setup and teardown methods to avoid duplication
+
+## Test Coverage
+- Write unit tests for individual functions and methods
+- Write integration tests for component interactions
+- Write end-to-end tests for critical user flows
+- Aim for high coverage of business logic (80%+ recommended)
+
+## Test Quality
+- Tests should be deterministic (no flaky tests)
+- Tests should be independent (can run in any order)
+- Mock external dependencies (APIs, databases, file system)
+- Use fixtures for test data
+- Keep tests fast - slow tests won't get run
+
+## Test-Driven Development
+- Write tests before implementation when appropriate
+- Red-Green-Refactor cycle
+- Tests serve as living documentation
