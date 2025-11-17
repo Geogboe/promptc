@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from .library import LibraryManager
 from .resolver import ImportResolver
-from .targets import raw, claude, cursor
+from .targets import raw, claude, cursor, aider, copilot
+from .validator import PromptValidator
 
 
 class PromptCompiler:
@@ -15,6 +16,8 @@ class PromptCompiler:
         "raw": raw.format_prompt,
         "claude": claude.format_prompt,
         "cursor": cursor.format_prompt,
+        "aider": aider.format_prompt,
+        "copilot": copilot.format_prompt,
     }
 
     def __init__(self, project_dir: Optional[Path] = None):
@@ -31,7 +34,8 @@ class PromptCompiler:
         self,
         prompt_file: Path,
         target: str = "raw",
-        debug: bool = False
+        debug: bool = False,
+        validate: bool = True
     ) -> str:
         """
         Compile a prompt file to the target format.
@@ -40,12 +44,13 @@ class PromptCompiler:
             prompt_file: Path to .prompt file
             target: Target format (raw, claude, cursor, etc.)
             debug: Show debug information
+            validate: Validate the prompt file before compiling (default: True)
 
         Returns:
             Compiled prompt content
 
         Raises:
-            ValueError: If target is not supported
+            ValueError: If target is not supported or validation fails
             FileNotFoundError: If prompt file or imports not found
             yaml.YAMLError: If prompt file has invalid YAML
         """
@@ -57,6 +62,13 @@ class PromptCompiler:
 
         # Load and parse prompt file
         spec = self._load_spec(prompt_file)
+
+        # Validate if requested
+        if validate:
+            is_valid, errors = PromptValidator.validate(spec)
+            if not is_valid:
+                error_msg = "Validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+                raise ValueError(error_msg)
 
         # Resolve imports
         imports = spec.get("imports", [])

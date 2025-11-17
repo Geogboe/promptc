@@ -1,0 +1,42 @@
+# Performance Constraints
+
+## Response Time
+- API endpoints should respond in < 200ms for 95th percentile
+- Database queries should complete in < 100ms
+- Page load time should be < 3 seconds
+- Implement timeouts for all external calls
+
+## Resource Usage
+- Monitor memory usage and prevent leaks
+- Limit CPU-intensive operations
+- Use connection pooling efficiently
+- Implement proper cleanup of resources
+- Cache frequently accessed data
+
+## Scalability
+- Design for horizontal scaling
+- Avoid single points of failure
+- Use load balancing where appropriate
+- Implement rate limiting
+- Design stateless services when possible
+
+## Optimization Techniques
+- Use lazy loading for large datasets
+- Implement pagination for list operations
+- Compress responses (gzip, brotli)
+- Optimize images and static assets
+- Use CDN for static content
+
+## Monitoring
+- Track response times and latency
+- Monitor error rates and status codes
+- Set up alerts for performance degradation
+- Use APM (Application Performance Monitoring) tools
+- Implement health check endpoints
+
+## Database Performance
+- Use database indexes appropriately
+- Implement query result caching
+- Avoid N+1 query problems
+- Use batch operations where possible
+- Monitor slow query logs
