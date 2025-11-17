@@ -1,0 +1,28 @@
+# Code Quality Standards
+
+## Code Organization
+- Follow the single responsibility principle
+- Keep functions small and focused (< 50 lines recommended)
+- Use meaningful variable and function names
+- Organize code into logical modules/packages
+- Avoid deep nesting (max 3-4 levels)
+
+## Documentation
+- Write clear docstrings for all public functions and classes
+- Document complex algorithms and business logic
+- Keep comments up-to-date with code changes
+- Use type hints/annotations where supported
+
+## Error Handling
+- Implement comprehensive error handling
+- Use specific exception types
+- Provide helpful error messages
+- Clean up resources properly (use context managers/finally blocks)
+- Don't catch exceptions silently
+
+## Code Style
+- Follow language-specific style guides (PEP 8 for Python, etc.)
+- Use consistent formatting (prefer automated formatters)
+- Remove dead code and commented-out code
+- Avoid magic numbers - use named constants
+- Keep dependencies up-to-date
