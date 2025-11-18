@@ -1,23 +1,14 @@
-# Go
+# Binaries
 bin/
+dist/
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
+
+# Go build cache
 *.test
 *.out
-go.work
-
-# Python (legacy - keeping for history)
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.pytest_cache/
-.coverage
-venv/
-env/
 
 # IDE
 .vscode/
@@ -26,15 +17,13 @@ env/
 *.swo
 *~
 
-# Build artifacts
-dist/
-build/
-
-# Test files
-test_output.md
-test*.prompt
-*.aider.txt
-
 # OS
 .DS_Store
 Thumbs.db
+
+# Build artifacts
+/promptc
+
+# Local test files
+*.local.prompt
+.test-*
