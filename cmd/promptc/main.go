@@ -20,11 +20,12 @@ var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	if err := newRootCmd().ExecuteContext(ctx); err != nil {
+		stop()
 		os.Exit(1)
 	}
+	stop()
 }
 
 func newRootCmd() *cobra.Command {
@@ -122,10 +123,10 @@ func newBuildCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			specFile := args[0]
 			return builder.Build(cmd.Context(), specFile, builder.BuildOptions{
-				OutputDir:      outputDir,
-				SkipValidate:   noValidate,
+				OutputDir:       outputDir,
+				SkipValidate:    noValidate,
 				SandboxOverride: sandboxOverride,
-				DryRun:         dryRun,
+				DryRun:          dryRun,
 			})
 		},
 	}

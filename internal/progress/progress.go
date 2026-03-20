@@ -14,23 +14,23 @@ var Writer io.Writer = os.Stderr
 
 // Step prints a progress step message with a leading "·" indicator.
 func Step(format string, args ...any) {
-	fmt.Fprintf(Writer, "· "+format+"\n", args...)
+	fmt.Fprintf(Writer, "· "+format+"\n", args...) //nolint:errcheck // stderr write, fire-and-forget
 }
 
 // Done prints a completion message with a "✓" indicator.
 func Done(format string, args ...any) {
-	fmt.Fprintf(Writer, "✓ "+format+"\n", args...)
+	fmt.Fprintf(Writer, "✓ "+format+"\n", args...) //nolint:errcheck // stderr write, fire-and-forget
 }
 
 // Fail prints a failure message with a "✗" indicator.
 func Fail(format string, args ...any) {
-	fmt.Fprintf(Writer, "✗ "+format+"\n", args...)
+	fmt.Fprintf(Writer, "✗ "+format+"\n", args...) //nolint:errcheck // stderr write, fire-and-forget
 }
 
 // Spinner runs a simple inline spinner while fn executes.
 // It prints msg and shows elapsed time on completion or failure.
 func Spinner(msg string, fn func() error) error {
-	fmt.Fprintf(Writer, "· %s... ", msg)
+	fmt.Fprintf(Writer, "· %s... ", msg) //nolint:errcheck // stderr write
 	start := time.Now()
 
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -46,13 +46,13 @@ func Spinner(msg string, fn func() error) error {
 		case err := <-done:
 			elapsed := time.Since(start).Round(time.Millisecond)
 			if err != nil {
-				fmt.Fprintf(Writer, "\r✗ %s (%s)\n", msg, elapsed)
+				fmt.Fprintf(Writer, "\r✗ %s (%s)\n", msg, elapsed) //nolint:errcheck // stderr write
 				return err
 			}
-			fmt.Fprintf(Writer, "\r✓ %s (%s)\n", msg, elapsed)
+			fmt.Fprintf(Writer, "\r✓ %s (%s)\n", msg, elapsed) //nolint:errcheck // stderr write
 			return nil
 		default:
-			fmt.Fprintf(Writer, "\r%s %s... ", frames[i%len(frames)], msg)
+			fmt.Fprintf(Writer, "\r%s %s... ", frames[i%len(frames)], msg) //nolint:errcheck // stderr write
 			time.Sleep(80 * time.Millisecond)
 			i++
 		}

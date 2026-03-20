@@ -30,20 +30,47 @@ tasks:
       - go test -race -v ./...
 
   lint:
-    desc: Run golangci-lint
+    desc: Run golangci-lint (linters + formatters)
     cmds:
-      - golangci-lint run
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Check formatting with gofmt (use fmt-fix to auto-fix)
+    cmds:
+      - |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "Unformatted files:"
+          echo "$unformatted"
+          exit 1
+        fi
+
+  fmt-fix:
+    desc: Auto-fix formatting with gofmt
+    cmds:
+      - gofmt -w .
 
   secrets:
     desc: Scan for secrets with gitleaks
     cmds:
       - gitleaks detect --source=. --verbose
 
+  vuln:
+    desc: Check Go dependencies for known vulnerabilities (govulncheck)
+    cmds:
+      - govulncheck ./...
+
+  yaml-lint:
+    desc: Lint YAML files (requires yamllint)
+    cmds:
+      - "yamllint -d '{extends: default, rules: {line-length: {max: 200}, truthy: {allowed-values: [true, false, on]}}}' ."
+
   ci:
-    desc: Run full local CI gate (secrets + lint + test + build)
+    desc: Run full local CI gate (secrets + lint + vuln + test + build)
     cmds:
       - task: secrets
       - task: lint
+      - task: vuln
       - task: test
       - task: build
 

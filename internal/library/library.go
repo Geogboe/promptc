@@ -126,10 +126,12 @@ func validateImportName(importName string) error {
 		return ErrPathTraversal
 	}
 
-	// Only allow alphanumeric, dots, and underscores
+	// Only allow alphanumeric, dots, underscores, and hyphens
 	for _, c := range importName {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+		isAlpha := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		isDigit := c >= '0' && c <= '9'
+		isPunct := c == '.' || c == '_' || c == '-'
+		if !isAlpha && !isDigit && !isPunct {
 			return ErrInvalidImportName
 		}
 	}
@@ -205,17 +207,17 @@ func (m *Manager) loadEmbedded(relativePath string) (string, error) {
 
 // Library represents available libraries by source
 type Library struct {
-	Project  []string
-	Global   []string
-	BuiltIn  []string
+	Project []string
+	Global  []string
+	BuiltIn []string
 }
 
 // ListLibraries returns all available libraries organized by source
 func (m *Manager) ListLibraries() *Library {
 	lib := &Library{
-		Project:  []string{},
-		Global:   []string{},
-		BuiltIn:  []string{},
+		Project: []string{},
+		Global:  []string{},
+		BuiltIn: []string{},
 	}
 
 	for _, searchPath := range m.SearchPaths {

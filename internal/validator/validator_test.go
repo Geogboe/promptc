@@ -211,12 +211,12 @@ func TestValidateContextInvalidValueType(t *testing.T) {
 func TestValidateContextValidTypes(t *testing.T) {
 	spec := map[string]interface{}{
 		"context": map[string]interface{}{
-			"string":  "value",
-			"int":     42,
-			"int64":   int64(100),
-			"float":   3.14,
-			"bool":    true,
-			"nil":     nil,
+			"string": "value",
+			"int":    42,
+			"int64":  int64(100),
+			"float":  3.14,
+			"bool":   true,
+			"nil":    nil,
 		},
 		"features": []interface{}{"feature"}, // Need at least one feature
 	}
@@ -327,8 +327,8 @@ func TestValidateFeaturesInvalidDescriptionType(t *testing.T) {
 func TestValidateFeaturesEmptyString(t *testing.T) {
 	spec := map[string]interface{}{
 		"features": []interface{}{
-			"",           // Empty string
-			"   ",        // Whitespace only
+			"",    // Empty string
+			"   ", // Whitespace only
 			"valid feature",
 		},
 	}

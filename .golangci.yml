@@ -6,24 +6,28 @@ linters:
     - govet
     - staticcheck
     - gosec
-    - gofmt
     - unused
     - gocritic
     - misspell
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  gosec:
-    excludes:
-      - G304  # file inclusion via variable — intentional in library loader
-  gocritic:
-    disabled-checks:
-      - commentedOutCode
+  settings:
+    errcheck:
+      check-type-assertions: true
+    gosec:
+      excludes:
+        - G204  # subprocess via variable — intentional in sandbox/none.go
+        - G301  # dir permissions 0755 — fine for CLI output dirs
+        - G304  # file inclusion via variable — intentional in library loader + compiler
+        - G306  # file permissions 0644 — fine for generated output files
+        - G703  # path traversal via taint — paths are controlled (cache hash, temp files)
 
-issues:
-  exclude-rules:
-    - path: "_test\\.go"
-      linters:
-        - gosec
-        - errcheck
+  exclusions:
+    rules:
+      - path: _test.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt

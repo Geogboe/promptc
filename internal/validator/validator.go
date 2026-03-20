@@ -279,14 +279,15 @@ func validateBuild(build interface{}) []string {
 				errors = append(errors, "'build.sandbox.type' is required")
 			} else {
 				typeStr, ok := typeVal.(string)
-				if !ok {
+				switch {
+				case !ok:
 					errors = append(errors, "'build.sandbox.type' must be a string")
-				} else if !validTypes[typeStr] {
+				case !validTypes[typeStr]:
 					errors = append(errors, fmt.Sprintf(
 						"'build.sandbox.type' %q is invalid; must be one of: docker, bubblewrap, none",
 						typeStr,
 					))
-				} else if typeStr == "docker" {
+				case typeStr == "docker":
 					// image is required for docker
 					imageVal, hasImage := sandboxMap["image"]
 					if !hasImage {

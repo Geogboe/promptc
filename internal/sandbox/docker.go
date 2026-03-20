@@ -31,16 +31,16 @@ func (d *dockerSandbox) Run(ctx context.Context, cmd string, args []string) erro
 	if err != nil {
 		return fmt.Errorf("creating docker client: %w\n\nEnsure Docker Engine is running.\n  Windows: winget install Docker.DockerEngine  (or choco install docker-engine)\n  macOS:   brew install docker\n  Linux:   your package manager (apt/dnf/pacman)", err)
 	}
-	defer cli.Close()
+	defer func() { _ = cli.Close() }()
 
 	// Pull image (no-op if already present)
-	fmt.Fprintf(os.Stderr, "· Pulling image %s...\n", d.cfg.Image)
+	fmt.Fprintf(os.Stderr, "· Pulling image %s...\n", d.cfg.Image) //nolint:errcheck // stderr progress
 	reader, err := cli.ImagePull(ctx, d.cfg.Image, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("pulling image %s: %w", d.cfg.Image, err)
 	}
-	io.Copy(io.Discard, reader)
-	reader.Close()
+	_, _ = io.Copy(io.Discard, reader) // drain pull progress stream
+	_ = reader.Close()
 
 	// Build command slice
 	fullCmd := append([]string{cmd}, args...)
@@ -85,8 +85,8 @@ func (d *dockerSandbox) Run(ctx context.Context, cmd string, args []string) erro
 	if err != nil {
 		return fmt.Errorf("attaching to container logs: %w", err)
 	}
-	defer logs.Close()
-	stdcopy.StdCopy(os.Stdout, os.Stderr, logs)
+	defer func() { _ = logs.Close() }()
+	_, _ = stdcopy.StdCopy(os.Stdout, os.Stderr, logs)
 
 	// Wait for completion
 	statusCh, errCh := cli.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
