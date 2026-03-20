@@ -3,13 +3,23 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/Geogboe/promptc/main/install.sh | sh
 set -eu
 
-REPO="Geogboe/promptc"
+REPO="${PROMPTC_REPO:-Geogboe/promptc}"
 BINARY="promptc"
+API_BASE="${PROMPTC_RELEASES_API_BASE:-https://api.github.com/repos}"
+RELEASE_TAG="${PROMPTC_RELEASE_TAG:-}"
+USER_AGENT="promptc-install"
 
 die() {
   echo "error: $*" >&2
   exit 1
 }
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 || die "required tool '$1' was not found"
+}
+
+require_tool curl
+require_tool perl
 
 # ── Detect OS ────────────────────────────────────────────────────────────────
 
@@ -29,56 +39,112 @@ case "${ARCH}" in
   *)               die "unsupported architecture: ${ARCH}" ;;
 esac
 
-# ── Fetch latest release tag ─────────────────────────────────────────────────
+fetch_release_json() {
+  if [ -n "${RELEASE_TAG}" ]; then
+    RELEASE_URL="${API_BASE}/${REPO}/releases/tags/${RELEASE_TAG}"
+  else
+    RELEASE_URL="${API_BASE}/${REPO}/releases/latest"
+  fi
 
-echo "Fetching latest release..."
-TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | grep '"tag_name"' \
-  | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
-[ -n "${TAG}" ] || die "could not determine latest release tag"
-echo "Latest release: ${TAG}"
+  echo "Fetching release metadata..."
+  curl -fsSL \
+    -H "Accept: application/vnd.github+json" \
+    -H "User-Agent: ${USER_AGENT}" \
+    "${RELEASE_URL}" \
+    || die "failed to fetch release metadata from ${RELEASE_URL}"
+}
 
-# ── Construct URLs ────────────────────────────────────────────────────────────
+release_tag_from_json() {
+  printf '%s' "$1" | perl -0ne 'if (/"tag_name"\s*:\s*"(.*?)"/s) { print $1; exit 0 }'
+}
 
-ARCHIVE="${BINARY}_${TAG}_${OS}_${ARCH}.tar.gz"
-BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
-ARCHIVE_URL="${BASE_URL}/${ARCHIVE}"
-CHECKSUMS_URL="${BASE_URL}/checksums.txt"
+asset_count_from_json() {
+  printf '%s' "$1" | perl -0ne 'print scalar(() = /"browser_download_url"\s*:/g), "\n"'
+}
+
+select_asset() {
+  json="$1"
+  regex="$2"
+  description="$3"
+
+  if ! result="$(
+    printf '%s' "$json" | ASSET_REGEX="$regex" perl -0ne '
+      my $pattern = $ENV{ASSET_REGEX};
+      while (/"name"\s*:\s*"([^"]+)".*?"browser_download_url"\s*:\s*"([^"]+)"/sg) {
+        if ($1 =~ /$pattern/) {
+          print "$1\n$2\n";
+          exit 0;
+        }
+      }
+      exit 1;
+    '
+  )"; then
+    die "could not find a ${description} asset matching '${regex}'"
+  fi
+
+  printf '%s' "$result"
+}
+
+RELEASE_JSON="$(fetch_release_json)"
+TAG="$(release_tag_from_json "${RELEASE_JSON}")"
+[ -n "${TAG}" ] || die "could not determine release tag"
+echo "Release: ${TAG}"
+
+ASSET_COUNT="$(asset_count_from_json "${RELEASE_JSON}")"
+[ "${ASSET_COUNT}" -gt 0 ] || die "release '${TAG}' has no published assets"
 
 # ── Work in a temp dir ────────────────────────────────────────────────────────
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
+# ── Resolve release assets ────────────────────────────────────────────────────
+
+ARCHIVE_INFO="$(select_asset "${RELEASE_JSON}" "^${BINARY}_.+_${OS}_${ARCH}\.tar\.gz$" "archive")"
+ARCHIVE_NAME="$(printf '%s' "${ARCHIVE_INFO}" | sed -n '1p')"
+ARCHIVE_URL="$(printf '%s' "${ARCHIVE_INFO}" | sed -n '2p')"
+
+CHECKSUMS_INFO="$(select_asset "${RELEASE_JSON}" '^checksums\.txt$' "checksum file")"
+CHECKSUMS_NAME="$(printf '%s' "${CHECKSUMS_INFO}" | sed -n '1p')"
+CHECKSUMS_URL="$(printf '%s' "${CHECKSUMS_INFO}" | sed -n '2p')"
+
 # ── Download archive + checksums ─────────────────────────────────────────────
 
-echo "Downloading ${ARCHIVE}..."
-curl -fsSL -o "${TMP}/${ARCHIVE}" "${ARCHIVE_URL}" \
+echo "Downloading ${ARCHIVE_NAME}..."
+curl -fsSL -o "${TMP}/${ARCHIVE_NAME}" "${ARCHIVE_URL}" \
   || die "failed to download ${ARCHIVE_URL}"
 
-echo "Downloading checksums..."
-curl -fsSL -o "${TMP}/checksums.txt" "${CHECKSUMS_URL}" \
+echo "Downloading ${CHECKSUMS_NAME}..."
+curl -fsSL -o "${TMP}/${CHECKSUMS_NAME}" "${CHECKSUMS_URL}" \
   || die "failed to download ${CHECKSUMS_URL}"
 
 # ── Verify SHA256 ─────────────────────────────────────────────────────────────
 
 echo "Verifying checksum..."
+EXPECTED_HASH="$(ASSET_NAME="${ARCHIVE_NAME}" perl -0ne '
+  if (/^([A-Fa-f0-9]{64})\s+\Q$ENV{ASSET_NAME}\E$/m) {
+    print "$1\n";
+    exit 0;
+  }
+' "${TMP}/${CHECKSUMS_NAME}")"
+[ -n "${EXPECTED_HASH}" ] || die "checksum entry for '${ARCHIVE_NAME}' not found in ${CHECKSUMS_NAME}"
+
 if command -v sha256sum >/dev/null 2>&1; then
   # Linux / GNU coreutils
-  (cd "${TMP}" && grep "${ARCHIVE}" checksums.txt | sha256sum --check --status) \
-    || die "checksum verification failed"
+  ACTUAL_HASH="$(sha256sum "${TMP}/${ARCHIVE_NAME}" | awk '{print $1}')"
 elif command -v shasum >/dev/null 2>&1; then
   # macOS / BSD
-  (cd "${TMP}" && grep "${ARCHIVE}" checksums.txt | shasum -a 256 --check --status) \
-    || die "checksum verification failed"
+  ACTUAL_HASH="$(shasum -a 256 "${TMP}/${ARCHIVE_NAME}" | awk '{print $1}')"
 else
   die "no sha256sum or shasum found; cannot verify download"
 fi
+
+[ "${ACTUAL_HASH}" = "${EXPECTED_HASH}" ] || die "checksum verification failed"
 echo "Checksum OK."
 
 # ── Extract binary ────────────────────────────────────────────────────────────
 
-tar -xzf "${TMP}/${ARCHIVE}" -C "${TMP}" "${BINARY}" \
+tar -xzf "${TMP}/${ARCHIVE_NAME}" -C "${TMP}" "${BINARY}" \
   || die "failed to extract binary from archive"
 
 chmod +x "${TMP}/${BINARY}"
