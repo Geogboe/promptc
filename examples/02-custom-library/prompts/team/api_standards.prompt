@@ -1,0 +1,14 @@
+# Team API Standards
+
+## Delivery Expectations
+- Design endpoints for operational support workflows rather than generic CRUD alone.
+- Include idempotency guidance for actions that may be retried by support staff.
+- Prefer structured error codes that can be surfaced directly in internal tooling.
+
+## Observability
+- Emit request IDs in every response and log entry.
+- Capture actor identity and escalation reason in audit events.
+
+## Collaboration
+- Document ownership for each workflow before implementation starts.
+- Keep runbooks close to the feature when the workflow can affect customer operations.

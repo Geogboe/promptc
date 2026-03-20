@@ -2,7 +2,7 @@
 
 ## Overview
 
-promptc is a spec-driven prompt compiler for agentic programming. It compiles `.spec.promptc` YAML files into a single generic `instructions.promptc` output, optionally fetching external resources and running an agent inside a sandbox.
+promptc is a spec-driven prompt compiler for agentic programming. It compiles `.spec.promptc` YAML files into a single generic `instructions.promptc` output, and `promptc build` can optionally fetch external resources and run an agent inside a sandbox.
 
 ## Component Diagram
 
@@ -108,7 +108,7 @@ Selection: `sandbox.New(config)` returns the correct implementation based on `co
 ```
 <outputDir>/                   # default: ./<specname>/
     instructions.promptc       # compiled instructions (markdown)
-    resources/                 # fetched resources (only with build/compile --fetch)
+    resources/                 # fetched resources when `promptc build` runs
         <name>.md              # from URL resources
         <name>/                # from git resources
 ```

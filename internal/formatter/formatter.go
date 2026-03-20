@@ -4,6 +4,7 @@ package formatter
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -41,7 +42,13 @@ func Format(spec Spec, importsContent string, meta FormatterMeta) string {
 	// Context section
 	if len(spec.Context) > 0 {
 		b.WriteString("\n## Context\n\n")
-		for key, value := range spec.Context {
+		keys := make([]string, 0, len(spec.Context))
+		for key := range spec.Context {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		for _, key := range keys {
+			value := spec.Context[key]
 			fmt.Fprintf(&b, "- **%s**: %v\n", key, value)
 		}
 	}

@@ -1,0 +1,39 @@
+imports:
+  - patterns.rest_api
+  - patterns.testing
+  - constraints.security
+  - constraints.code_quality
+
+context:
+  audience: support engineering
+  language: go
+  product: escalation assistant
+  runtime: cli
+
+features:
+  - workflow_summary: "Summarize support escalation workflows in a human-readable document"
+  - launch_checklist: "Produce an implementation checklist before code generation begins"
+
+constraints:
+  - no_hardcoded_secrets
+  - comprehensive_test_coverage
+  - clear_documentation
+
+resources:
+  - url: "https://example.com/prompting-playbook"
+    name: prompting-playbook
+  - url: "https://example.com/workflow-notes"
+    name: workflow-notes
+
+build:
+  agent:
+    command: codex
+    args:
+      - exec
+      - --skip-git-repo-check
+      - --full-auto
+      - --sandbox
+      - workspace-write
+      - "Read instructions.promptc and the files in resources/. Create or replace IMPLEMENTATION_NOTES.md with a concise build plan for the escalation assistant, then finish."
+  sandbox:
+    type: none

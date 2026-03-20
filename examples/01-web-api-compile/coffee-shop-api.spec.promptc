@@ -1,0 +1,24 @@
+imports:
+  - patterns.rest_api
+  - patterns.testing
+  - constraints.security
+  - constraints.code_quality
+
+context:
+  audience: internal platform team
+  database: postgresql
+  framework: chi
+  language: go
+  testing: testify
+
+features:
+  - search: "Search independent coffee shops by neighbourhood, roast style, and opening hours"
+  - favorites: "Save favourite shops per user account"
+  - admin: "Curate featured roasters and seasonal recommendations"
+  - api_docs: "Expose OpenAPI documentation for every endpoint"
+
+constraints:
+  - no_hardcoded_secrets
+  - comprehensive_test_coverage
+  - structured_logging
+  - graceful_shutdown

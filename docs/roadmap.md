@@ -59,6 +59,7 @@ imports:
 - `promptc cache clear` — evict resource cache entries
 - Watch mode: `promptc compile --watch` re-compiles on spec change
 - Resource cache TTL configuration
+- Build harnesses: deterministic build-time tooling that can constrain agent execution with concrete commands, frameworks, hooks, session handling, storage rules, and subagent orchestration patterns while still calling real tools where possible
 
 ### Distribution (v2)
 - Investigate package manager distribution: Homebrew tap, Scoop bucket, possibly npm wrapper
@@ -74,6 +75,7 @@ Focus: Library versioning, remote specs, multi-agent builds.
 - Library versioning: `user/repo@v1.2.3` import syntax
 - Remote spec references: compile a spec from a URL
 - Multi-agent builds: parallel agent runs for different spec sections
+- Richer harness models: explore when a harness should stay deterministic and tool-driven versus when an LLM-managed harness is worth the extra flexibility
 - `promptc upgrade` — update installed libraries to latest versions
 - Spec composition: one spec can import another spec's features/constraints
 - Dry-run diff: show what `build` would change without running agent

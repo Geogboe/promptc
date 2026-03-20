@@ -51,6 +51,29 @@ func TestFormat_Context(t *testing.T) {
 	}
 }
 
+func TestFormat_ContextSorted(t *testing.T) {
+	spec := Spec{
+		Context: map[string]interface{}{
+			"framework": "fiber",
+			"database":  "postgresql",
+			"language":  "go",
+		},
+	}
+
+	result := Format(spec, "", fixedMeta())
+
+	databaseIndex := strings.Index(result, "**database**: postgresql")
+	frameworkIndex := strings.Index(result, "**framework**: fiber")
+	languageIndex := strings.Index(result, "**language**: go")
+
+	if databaseIndex == -1 || frameworkIndex == -1 || languageIndex == -1 {
+		t.Fatalf("missing expected context entries in output:\n%s", result)
+	}
+	if !(databaseIndex < frameworkIndex && frameworkIndex < languageIndex) {
+		t.Fatalf("context entries are not sorted alphabetically:\n%s", result)
+	}
+}
+
 func TestFormat_Guidelines(t *testing.T) {
 	result := Format(Spec{}, "# REST API Patterns\nUse RESTful conventions.", fixedMeta())
 

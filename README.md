@@ -1,31 +1,29 @@
 # promptc - Prompt Compiler for Agentic Programming
 
-A fast, zero-dependency CLI tool (written in Go) that compiles LLM instructions into different formats. Stop copy-pasting instructions between Claude, Cursor, Aider, and other AI coding tools.
-
-**New in v0.2.0**: Complete rewrite in Go for better performance, single binary distribution, and no runtime dependencies!
+A fast, zero-dependency CLI tool (written in Go) that compiles `.spec.promptc` files into a single `instructions.promptc` output. Stop copy-pasting instructions between projects and tools.
 
 ## The Problem
 
-As developers using AI coding assistants, we face several challenges:
+As developers using AI coding assistants, we face a few recurring problems:
 
-- **Scattered instructions**: Different tools need different formats (.cursorrules, .claude/instructions.md, etc.)
-- **No reusability**: Common patterns (REST APIs, testing, security) are copy-pasted across projects
-- **Inconsistency**: Instructions drift between tools and projects
-- **No composition**: Can't build on shared knowledge bases
+- **Scattered instructions**: The same guidance gets duplicated across repos and tool-specific files.
+- **No reusability**: Common patterns such as REST APIs, testing, and security are copied by hand.
+- **Inconsistency**: Instructions drift between projects over time.
+- **No composition**: It is hard to build on shared prompt libraries.
 
 ## The Solution
 
-`promptc` provides a **compiler for prompts** that lets you:
+`promptc` gives you a simple compiler flow:
 
-1. Write instructions once in a simple YAML format
-2. Import reusable prompt libraries (REST API patterns, security constraints, etc.)
-3. Compile to any target format (Claude, Cursor, Aider, Copilot)
-4. Share and version prompt libraries across projects
+1. Write instructions once in `.spec.promptc`
+2. Import reusable prompt libraries
+3. Compile to a single model-agnostic `instructions.promptc`
+4. Optionally run `promptc build` to fetch resources and execute an agent in a sandbox
 
 ### Mental Model
 
 ```
-[Reusable Prompt Libraries] + [Project Spec] → Compiler → [Target-specific prompt]
+[Reusable Prompt Libraries] + [Project Spec] → Compiler → instructions.promptc
 ```
 
 ## Installation
@@ -45,6 +43,7 @@ irm https://raw.githubusercontent.com/Geogboe/promptc/main/install.ps1 | iex
 ```
 
 Installs to `%USERPROFILE%\.local\bin` and adds it to your user PATH automatically. Override with `$env:PROMPTC_INSTALL_DIR`.
+The install scripts resolve published release assets from the GitHub release metadata instead of guessing archive names.
 
 ### go install (requires Go 1.21+)
 
@@ -62,18 +61,23 @@ Download the latest release archive for your platform from the [releases page](h
 git clone https://github.com/Geogboe/promptc.git
 cd promptc
 task build
-# Or: go build -o bin/promptc cmd/promptc/main.go
+# Or: go build -o bin/promptc.exe ./cmd/promptc
 ```
+
+## Examples
+
+The `examples/` directory is the canonical place to learn promptc through real workflows.
+Start with [examples/README.md](examples/README.md) for runnable examples and expected outputs.
 
 ## Quick Start
 
 ### 1. Initialize a new project
 
 ```bash
-promptc init myapp.prompt --template=web-api
+promptc init myapp.spec.promptc --template=web-api
 ```
 
-### 2. Edit your .prompt file
+### 2. Edit your `.spec.promptc` file
 
 ```yaml
 imports:
@@ -93,20 +97,11 @@ constraints:
   - comprehensive_test_coverage
 ```
 
-### 3. Compile to your target format
+### 3. Validate and compile
 
 ```bash
-# Compile for Claude
-promptc compile myapp.prompt --target=claude --output=.claude/instructions.md
-
-# Compile for Cursor
-promptc compile myapp.prompt --target=cursor --output=.cursorrules
-
-# Compile for Aider
-promptc compile myapp.prompt --target=aider --output=.aider.txt
-
-# Compile for GitHub Copilot
-promptc compile myapp.prompt --target=copilot --output=.github/copilot-instructions.md
+promptc validate myapp.spec.promptc
+promptc compile myapp.spec.promptc
 ```
 
 ## Features
@@ -125,56 +120,51 @@ promptc compile myapp.prompt --target=copilot --output=.github/copilot-instructi
 - `constraints.performance` - Performance optimization
 - `constraints.accessibility` - WCAG compliance
 
-### Supported Targets (5 formats)
-
-- **raw** - Plain text output
-- **claude** - Markdown format for Claude
-- **cursor** - Cursor rules format
-- **aider** - Aider configuration format
-- **copilot** - GitHub Copilot instructions
-
 ### Project Templates
 
 Initialize projects with templates:
 
 ```bash
-promptc init myapp.prompt --template=basic      # Basic template
-promptc init myapp.prompt --template=web-api    # Web API template
-promptc init myapp.prompt --template=cli-tool   # CLI tool template
+promptc init myapp.spec.promptc --template=basic      # Basic template
+promptc init myapp.spec.promptc --template=web-api    # Web API template
+promptc init myapp.spec.promptc --template=cli-tool   # CLI tool template
 ```
 
 ## Commands
 
-### List Available Libraries
+### Validate Specs
 
 ```bash
-# List all available prompt libraries
-promptc list
-
-# Show descriptions
-promptc list --verbose
+promptc validate myapp.spec.promptc
 ```
 
 ### Compile Prompts
 
 ```bash
-# Compile to stdout
-promptc compile myapp.prompt
+promptc compile myapp.spec.promptc
+promptc compile myapp.spec.promptc --output=./output
+promptc compile myapp.spec.promptc --debug
+promptc compile myapp.spec.promptc --no-validate
+```
 
-# Compile to file
-promptc compile myapp.prompt --target=claude --output=instructions.md
+### Build Projects
 
-# Debug mode
-promptc compile myapp.prompt --debug
+```bash
+promptc build myapp.spec.promptc --dry-run
+promptc build myapp.spec.promptc
+```
 
-# Skip validation
-promptc compile myapp.prompt --no-validate
+### List Libraries
+
+```bash
+promptc list
+promptc list --verbose
 ```
 
 ### Initialize Projects
 
 ```bash
-promptc init [name] --template=<template>
+promptc init [name.spec.promptc] --template=<template>
 ```
 
 ## Advanced Usage
@@ -219,15 +209,7 @@ imports:
 
 ## Use Cases
 
-### 1. Consistent Instructions Across Tools
-
-```bash
-promptc compile myapp.prompt --target=claude --output=.claude/instructions.md
-promptc compile myapp.prompt --target=cursor --output=.cursorrules
-promptc compile myapp.prompt --target=aider --output=.aider.txt
-```
-
-### 2. Team Knowledge Base
+### 1. Team Knowledge Base
 
 Share prompt libraries across your team:
 
@@ -238,10 +220,6 @@ mkdir ~/.prompts/team
 imports:
   - team.api_standards
 ```
-
-### 3. Project Templates
-
-Create templates for common project types and share them.
 
 ## Why Go?
 
@@ -281,30 +259,16 @@ go test ./...               # Run all tests
 go test -v ./internal/...   # Verbose output
 ```
 
-### Project Structure
-
-```
-promptc/
-├── cmd/promptc/          # Main entry point
-├── internal/
-│   ├── compiler/         # Core compilation logic
-│   ├── library/          # Library management (with go:embed)
-│   ├── resolver/         # Import resolution
-│   ├── validator/        # Validation logic
-│   └── targets/          # Target-specific formatters
-├── Makefile              # Build automation
-├── go.mod                # Go module definition
-└── README.md             # This file
-```
-
 ## Roadmap
 
 - [x] Core compilation engine
-- [x] Multiple target formats (5 targets)
+- [x] Generic `instructions.promptc` output
 - [x] Built-in prompt libraries (8 libraries)
 - [x] Project templates
 - [x] Validation system
 - [x] Go rewrite for performance
+- [x] Build pipeline with resource fetching and sandboxed agent execution
+- [x] Examples directory for real workflows
 - [ ] Watch mode for auto-recompilation
 - [ ] Library versioning
 - [ ] Published library packages

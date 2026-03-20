@@ -1,0 +1,20 @@
+imports:
+  - patterns.rest_api
+  - constraints.security
+  - team.api_standards
+
+context:
+  audience: customer operations
+  language: typescript
+  runtime: bun
+  service_tier: internal tooling
+
+features:
+  - intake_dashboard: "Triage incoming support requests with saved views and routing shortcuts"
+  - escalation_notes: "Generate structured escalation notes for engineering handoff"
+  - audit_log: "Keep a searchable audit trail of operator actions"
+
+constraints:
+  - no_hardcoded_secrets
+  - pii_redaction
+  - accessible_ui_copy
