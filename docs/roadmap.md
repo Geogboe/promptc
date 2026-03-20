@@ -60,6 +60,10 @@ imports:
 - Watch mode: `promptc compile --watch` re-compiles on spec change
 - Resource cache TTL configuration
 
+### Distribution (v2)
+- Investigate package manager distribution: Homebrew tap, Scoop bucket, possibly npm wrapper
+- Evaluate creating dedicated repos under personal account or a `promptc-dev` org for managing taps/buckets
+
 ---
 
 ## v3 — Advanced Features

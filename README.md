@@ -30,28 +30,38 @@ As developers using AI coding assistants, we face several challenges:
 
 ## Installation
 
-### Download Binary (Recommended)
+### Shell script (Linux / macOS) — Recommended
 
-Download the latest release for your platform:
-- Linux (amd64): `promptc-linux-amd64`
-- macOS (Intel): `promptc-darwin-amd64`
-- macOS (Apple Silicon): `promptc-darwin-arm64`
-- Windows: `promptc-windows-amd64.exe`
-
-Make executable and add to PATH:
-```bash
-chmod +x promptc-*
-sudo mv promptc-* /usr/local/bin/promptc
+```sh
+curl -fsSL https://raw.githubusercontent.com/Geogboe/promptc/main/install.sh | sh
 ```
 
-### Build from Source
+Installs to `/usr/local/bin` if writable, otherwise `~/.local/bin`. Override with `PROMPTC_INSTALL_DIR`.
 
-Requires Go 1.21 or later:
+### PowerShell (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/Geogboe/promptc/main/install.ps1 | iex
+```
+
+Installs to `%USERPROFILE%\.local\bin` and adds it to your user PATH automatically. Override with `$env:PROMPTC_INSTALL_DIR`.
+
+### go install (requires Go 1.21+)
+
+```sh
+go install github.com/Geogboe/promptc/cmd/promptc@latest
+```
+
+### Manual download
+
+Download the latest release archive for your platform from the [releases page](https://github.com/Geogboe/promptc/releases/latest).
+
+### Build from Source
 
 ```bash
 git clone https://github.com/Geogboe/promptc.git
 cd promptc
-make build
+task build
 # Or: go build -o bin/promptc cmd/promptc/main.go
 ```
 
@@ -258,10 +268,10 @@ The Go rewrite provides significant advantages:
 ### Building
 
 ```bash
-make build          # Build for current platform
-make build-all      # Build for all platforms
-make test           # Run tests
-make clean          # Clean build artifacts
+task build          # Build for current platform
+task build-all      # Build for all platforms
+task test           # Run tests
+task clean          # Clean build artifacts
 ```
 
 ### Testing
