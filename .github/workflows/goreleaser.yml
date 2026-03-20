@@ -3,6 +3,11 @@ name: GoReleaser
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.4.0)"
+        required: true
 
 permissions:
   contents: write
