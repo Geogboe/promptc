@@ -1,0 +1,17 @@
+[extend]
+# Use the default gitleaks ruleset as the base
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+  ".gitleaks.toml",
+  "go.sum",
+]
+
+# Project-specific patterns to watch for
+[[rules]]
+id = "promptc-api-key"
+description = "Generic API key pattern in promptc context"
+regex = '''(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}['\"]?'''
+tags = ["api", "key"]

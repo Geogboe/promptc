@@ -1,0 +1,82 @@
+version: '3'
+
+vars:
+  BINARY: bin/promptc
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+
+tasks:
+  default:
+    desc: Show available tasks
+    silent: true
+    cmds:
+      - task --list
+
+  build:
+    desc: Build promptc binary
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY}}"
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags "-X main.version={{.VERSION}}" -o {{.BINARY}} ./cmd/promptc
+
+  test:
+    desc: Run all tests with race detector
+    cmds:
+      - go test -race -v ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  secrets:
+    desc: Scan for secrets with gitleaks
+    cmds:
+      - gitleaks detect --source=. --verbose
+
+  ci:
+    desc: Run full local CI gate (secrets + lint + test + build)
+    cmds:
+      - task: secrets
+      - task: lint
+      - task: test
+      - task: build
+
+  release-check:
+    desc: Validate goreleaser config and run snapshot build
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  build-all:
+    desc: Cross-compile for all platforms (matrix build)
+    cmds:
+      - mkdir -p dist
+      - task: _build-target
+        vars: {GOOS: linux, GOARCH: amd64, EXT: ""}
+      - task: _build-target
+        vars: {GOOS: darwin, GOARCH: amd64, EXT: ""}
+      - task: _build-target
+        vars: {GOOS: darwin, GOARCH: arm64, EXT: ""}
+      - task: _build-target
+        vars: {GOOS: windows, GOARCH: amd64, EXT: .exe}
+
+  _build-target:
+    internal: true
+    desc: "Build for {{.GOOS}}/{{.GOARCH}}"
+    label: "build-{{.GOOS}}-{{.GOARCH}}"
+    env:
+      GOOS: "{{.GOOS}}"
+      GOARCH: "{{.GOARCH}}"
+      CGO_ENABLED: "0"
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}}" -o dist/promptc-{{.GOOS}}-{{.GOARCH}}{{.EXT}} ./cmd/promptc
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf bin/ dist/
