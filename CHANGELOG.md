@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Geogboe/promptc/compare/v0.4.0...v0.5.0) (2026-03-20)
+
+
+### Features
+
+* add one-line install scripts for Linux/macOS and Windows ([13b4bcf](https://github.com/Geogboe/promptc/commit/13b4bcfd0a03a30e390d02f4c96ea8dbfa9604f6))
+
 ## [0.4.0](https://github.com/Geogboe/promptc/compare/v0.3.0...v0.4.0) (2026-03-20)
 
 
