@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Geogboe/promptc/schema/spec.promptc.schema.json",
+  "title": "promptc spec",
+  "description": "Schema for .spec.promptc YAML specification files",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "imports": {
+      "type": "array",
+      "description": "Prompt library names to import (prefix with ! to exclude)",
+      "items": {
+        "type": "string",
+        "pattern": "^(!?[a-zA-Z0-9][a-zA-Z0-9._\\-]*)$"
+      },
+      "examples": [["patterns.rest_api", "constraints.security", "!patterns.database"]]
+    },
+    "context": {
+      "type": "object",
+      "description": "Key-value project metadata included in the output",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string"},
+          {"type": "number"},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
+      },
+      "examples": [{"language": "go", "framework": "fiber", "database": "postgresql"}]
+    },
+    "features": {
+      "type": "array",
+      "description": "Features to implement",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "description": "Simple feature description"
+          },
+          {
+            "type": "object",
+            "description": "Named feature with description",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "additionalProperties": {"type": "string"}
+          }
+        ]
+      },
+      "examples": [[
+        {"auth": "JWT authentication"},
+        {"api": "REST API endpoints"},
+        "background job processing"
+      ]]
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Constraints and standards to enforce",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "description": "Constraint name (snake_case)"
+          },
+          {
+            "type": "object",
+            "description": "Constraint with value, or exclusion directive",
+            "additionalProperties": {
+              "oneOf": [
+                {"type": "string"},
+                {"type": "boolean"}
+              ]
+            }
+          }
+        ]
+      },
+      "examples": [["no_hardcoded_secrets", "comprehensive_error_handling"]]
+    },
+    "resources": {
+      "type": "array",
+      "description": "External resources to fetch and bundle with the compiled output",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "oneOf": [
+          {"required": ["url"]},
+          {"required": ["git"]}
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Destination name (alphanumeric + hyphens)",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9\\-]*$"
+          },
+          "url": {
+            "type": "string",
+            "description": "HTTP/HTTPS URL to fetch",
+            "format": "uri"
+          },
+          "git": {
+            "type": "string",
+            "description": "Git repository URL to clone",
+            "format": "uri"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Branch, tag, or commit (git only; default: default branch)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Subdirectory within the repo to copy (git only)"
+          }
+        }
+      },
+      "examples": [[
+        {"url": "https://pkg.go.dev/github.com/gofiber/fiber/v2", "name": "fiber-docs"},
+        {"git": "https://github.com/org/repo", "ref": "main", "path": "docs/", "name": "reference-repo"}
+      ]]
+    },
+    "build": {
+      "type": "object",
+      "description": "Build pipeline configuration (agent + sandbox)",
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "object",
+          "description": "Agent CLI to invoke",
+          "additionalProperties": false,
+          "required": ["command"],
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Agent binary name (must be on PATH)",
+              "examples": ["claude", "aider"]
+            },
+            "args": {
+              "type": "array",
+              "description": "Additional arguments to pass to the agent",
+              "items": {"type": "string"},
+              "examples": [["--dangerously-skip-permissions"]]
+            }
+          }
+        },
+        "sandbox": {
+          "type": "object",
+          "description": "Sandbox isolation configuration",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["docker", "bubblewrap", "none"],
+              "description": "Sandbox provider (docker recommended for most platforms)"
+            },
+            "image": {
+              "type": "string",
+              "description": "Docker image to use (required when type=docker)",
+              "examples": ["ubuntu:22.04"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

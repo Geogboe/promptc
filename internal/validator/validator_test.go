@@ -61,7 +61,7 @@ func TestValidateInvalidTopLevelKey(t *testing.T) {
 
 	found := false
 	for _, err := range errors {
-		if strings.Contains(err, "Unknown top-level key") && strings.Contains(err, "invalid_key") {
+		if strings.Contains(err, "unknown top-level key") && strings.Contains(err, "invalid_key") {
 			found = true
 			break
 		}
@@ -357,13 +357,13 @@ func TestValidateFeaturesInvalidType(t *testing.T) {
 
 	found := false
 	for _, err := range errors {
-		if strings.Contains(err, "must be a string or dictionary") {
+		if strings.Contains(err, "must be a string or single-key dictionary") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Expected error about string or dictionary, got: %v", errors)
+		t.Errorf("Expected error about string or single-key dictionary, got: %v", errors)
 	}
 }
 
@@ -547,5 +547,259 @@ func TestValidateMinimalValidSpec(t *testing.T) {
 	isValid, errors := Validate(spec)
 	if !isValid {
 		t.Errorf("Expected valid minimal spec, got errors: %v", errors)
+	}
+}
+
+// --- resources validation ---
+
+func TestValidateResourcesValid(t *testing.T) {
+	spec := map[string]interface{}{
+		"features": []interface{}{"feature"},
+		"resources": []interface{}{
+			map[string]interface{}{
+				"url":  "https://example.com/docs",
+				"name": "example-docs",
+			},
+			map[string]interface{}{
+				"git":  "https://github.com/org/repo",
+				"name": "reference-repo",
+				"ref":  "main",
+				"path": "docs/",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if !isValid {
+		t.Errorf("Expected valid resources spec, got errors: %v", errors)
+	}
+}
+
+func TestValidateResourcesNotList(t *testing.T) {
+	spec := map[string]interface{}{
+		"resources": "not-a-list",
+	}
+	isValid, _ := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when resources is not a list")
+	}
+}
+
+func TestValidateResourcesMissingName(t *testing.T) {
+	spec := map[string]interface{}{
+		"resources": []interface{}{
+			map[string]interface{}{
+				"url": "https://example.com",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when resource name is missing")
+	}
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "name") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected error about missing name, got: %v", errors)
+	}
+}
+
+func TestValidateResourcesBothURLAndGit(t *testing.T) {
+	spec := map[string]interface{}{
+		"resources": []interface{}{
+			map[string]interface{}{
+				"url":  "https://example.com",
+				"git":  "https://github.com/org/repo",
+				"name": "both-set",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when both url and git are set")
+	}
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "either") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected 'either url or git' error, got: %v", errors)
+	}
+}
+
+func TestValidateResourcesNeitherURLNorGit(t *testing.T) {
+	spec := map[string]interface{}{
+		"resources": []interface{}{
+			map[string]interface{}{
+				"name": "no-source",
+			},
+		},
+	}
+	isValid, _ := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when neither url nor git is set")
+	}
+}
+
+func TestValidateResourcesInvalidName(t *testing.T) {
+	spec := map[string]interface{}{
+		"resources": []interface{}{
+			map[string]interface{}{
+				"url":  "https://example.com",
+				"name": "invalid/name",
+			},
+		},
+	}
+	isValid, _ := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid name with path separator")
+	}
+}
+
+// --- build validation ---
+
+func TestValidateBuildValid(t *testing.T) {
+	spec := map[string]interface{}{
+		"features": []interface{}{"feature"},
+		"build": map[string]interface{}{
+			"agent": map[string]interface{}{
+				"command": "claude",
+				"args":    []interface{}{"--dangerously-skip-permissions"},
+			},
+			"sandbox": map[string]interface{}{
+				"type":  "docker",
+				"image": "ubuntu:22.04",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if !isValid {
+		t.Errorf("Expected valid build spec, got errors: %v", errors)
+	}
+}
+
+func TestValidateBuildSandboxNone(t *testing.T) {
+	spec := map[string]interface{}{
+		"features": []interface{}{"feature"},
+		"build": map[string]interface{}{
+			"agent": map[string]interface{}{
+				"command": "aider",
+			},
+			"sandbox": map[string]interface{}{
+				"type": "none",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if !isValid {
+		t.Errorf("Expected valid build spec with none sandbox, got errors: %v", errors)
+	}
+}
+
+func TestValidateBuildMissingAgentCommand(t *testing.T) {
+	spec := map[string]interface{}{
+		"build": map[string]interface{}{
+			"agent": map[string]interface{}{},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when agent command is missing")
+	}
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "command") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected error about missing command, got: %v", errors)
+	}
+}
+
+func TestValidateBuildInvalidSandboxType(t *testing.T) {
+	spec := map[string]interface{}{
+		"build": map[string]interface{}{
+			"sandbox": map[string]interface{}{
+				"type": "invalid-type",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid sandbox type")
+	}
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "invalid-type") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected error about invalid sandbox type, got: %v", errors)
+	}
+}
+
+func TestValidateBuildDockerRequiresImage(t *testing.T) {
+	spec := map[string]interface{}{
+		"build": map[string]interface{}{
+			"sandbox": map[string]interface{}{
+				"type": "docker",
+				// image missing
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if isValid {
+		t.Error("Expected invalid when docker sandbox has no image")
+	}
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "image") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected error about missing image, got: %v", errors)
+	}
+}
+
+func TestValidateFullSpec(t *testing.T) {
+	spec := map[string]interface{}{
+		"imports": []interface{}{"patterns.rest_api"},
+		"context": map[string]interface{}{"language": "go"},
+		"features": []interface{}{
+			map[string]interface{}{"auth": "JWT auth"},
+		},
+		"constraints": []interface{}{"no_hardcoded_secrets"},
+		"resources": []interface{}{
+			map[string]interface{}{
+				"url":  "https://pkg.go.dev/",
+				"name": "go-docs",
+			},
+		},
+		"build": map[string]interface{}{
+			"agent": map[string]interface{}{
+				"command": "claude",
+			},
+			"sandbox": map[string]interface{}{
+				"type":  "docker",
+				"image": "ubuntu:22.04",
+			},
+		},
+	}
+	isValid, errors := Validate(spec)
+	if !isValid {
+		t.Errorf("Expected valid full spec, got errors: %v", errors)
 	}
 }

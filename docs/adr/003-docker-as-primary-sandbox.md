@@ -67,7 +67,14 @@ Using `github.com/docker/docker/client` instead of shelling out to `docker`:
 - Docker SDK adds binary size (~several MB)
 - Container startup latency (~1-2s) per build
 
-**Windows native sandbox (deferred to v2):**
-`hcsshim` is the correct solution for native Windows containers without Docker Desktop. Deferred because it requires Windows Container feature setup and adds significant complexity. v1 recommendation for Windows: use Docker Desktop (Linux containers via WSL2).
+**Windows Docker Engine (without Docker Desktop):**
+Docker Desktop is NOT required. Docker Engine can be installed on Windows via:
+- `winget install Docker.DockerCLI` + `winget install Docker.DockerEngine`
+- `choco install docker-engine`
 
-**Trade-off accepted:** Docker Desktop is already the de facto standard for containerized development on developer machines. Requiring it for `promptc build` is a reasonable baseline for v1.
+This provides the Docker daemon and CLI without the Docker Desktop UI overhead.
+
+**Windows native sandbox (deferred to v2):**
+`hcsshim` is the correct solution for native Windows containers without any Docker requirement. Deferred because it requires Windows Container feature setup and adds significant complexity.
+
+**Trade-off accepted:** Docker Engine (not Desktop) is the recommended sandbox on all platforms. The `none` sandbox is available for users who don't want Docker at all.

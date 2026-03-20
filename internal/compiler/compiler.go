@@ -1,171 +1,283 @@
+// Package compiler compiles .spec.promptc files into instructions.promptc output.
 package compiler
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/Geogboe/promptc/internal/formatter"
 	"github.com/Geogboe/promptc/internal/library"
 	"github.com/Geogboe/promptc/internal/resolver"
-	"github.com/Geogboe/promptc/internal/targets"
 	"github.com/Geogboe/promptc/internal/validator"
 	"gopkg.in/yaml.v3"
 )
 
-// Compiler compiles .prompt files into target-specific formats
+// Version is injected at build time via -ldflags.
+var Version = "dev"
+
+// ParsedSpec is the fully structured representation of a .spec.promptc file.
+type ParsedSpec struct {
+	Imports     []string
+	Context     map[string]interface{}
+	Features    []interface{}
+	Constraints []interface{}
+	Resources   []SpecResource
+	Build       *SpecBuild
+}
+
+// SpecResource represents one entry in the resources section.
+type SpecResource struct {
+	Name string
+	URL  string
+	Git  string
+	Ref  string
+	Path string
+}
+
+// SpecBuild holds the build pipeline configuration.
+type SpecBuild struct {
+	Agent   SpecAgent
+	Sandbox SpecSandbox
+}
+
+// SpecAgent describes the agent CLI to invoke.
+type SpecAgent struct {
+	Command string
+	Args    []string
+}
+
+// SpecSandbox describes the sandbox environment.
+type SpecSandbox struct {
+	Type  string
+	Image string
+}
+
+// CompileOptions controls compiler behaviour.
+type CompileOptions struct {
+	OutputDir    string // default: CWD/<specname-without-ext>/
+	SkipValidate bool
+	Debug        bool
+}
+
+// Compiler compiles .spec.promptc files into instructions.promptc.
 type Compiler struct {
 	LibraryManager *library.Manager
 	Resolver       *resolver.Resolver
 }
 
-// NewCompiler creates a new prompt compiler
+// NewCompiler creates a Compiler rooted at projectDir for library resolution.
 func NewCompiler(projectDir string) *Compiler {
-	libraryManager := library.NewManager(projectDir)
+	mgr := library.NewManager(projectDir)
 	return &Compiler{
-		LibraryManager: libraryManager,
-		Resolver:       resolver.NewResolver(libraryManager),
+		LibraryManager: mgr,
+		Resolver:       resolver.NewResolver(mgr),
 	}
 }
 
-// CompileOptions contains options for compilation
-type CompileOptions struct {
-	Target   string
-	Debug    bool
-	Validate bool
-}
-
-// Compile compiles a prompt file to the target format
-func (c *Compiler) Compile(promptFile string, opts *CompileOptions) (string, error) {
+// Compile validates, resolves, and formats specFile, writing the result to
+// <outputDir>/instructions.promptc. Returns the output path on success.
+func (c *Compiler) Compile(specFile string, opts *CompileOptions) (string, error) {
 	if opts == nil {
-		opts = &CompileOptions{
-			Target:   "raw",
-			Validate: true,
-		}
+		opts = &CompileOptions{}
 	}
 
-	// Check if target is supported
-	_, err := targets.GetFormatter(opts.Target)
+	raw, err := c.loadSpec(specFile)
 	if err != nil {
 		return "", err
 	}
 
-	// Load and parse prompt file
-	spec, err := c.loadSpec(promptFile)
-	if err != nil {
-		return "", err
-	}
-
-	// Validate if requested
-	if opts.Validate {
-		isValid, errors := validator.Validate(spec)
+	if !opts.SkipValidate {
+		isValid, errs := validator.Validate(raw)
 		if !isValid {
-			errorMsg := "Validation failed:\n"
-			for _, e := range errors {
-				errorMsg += fmt.Sprintf("  - %s\n", e)
+			msg := "validation failed:\n"
+			for _, e := range errs {
+				msg += fmt.Sprintf("  - %s\n", e)
 			}
-			return "", fmt.Errorf("%s", errorMsg)
+			return "", fmt.Errorf("%s", msg)
 		}
 	}
 
-	// Resolve imports
-	var imports []string
-	if importsRaw, ok := spec["imports"]; ok {
-		if importsList, ok := importsRaw.([]interface{}); ok {
-			for _, imp := range importsList {
-				if impStr, ok := imp.(string); ok {
-					imports = append(imports, impStr)
-				}
-			}
-		}
-	}
+	spec := parseSpec(raw)
 
 	importsContent := ""
-	if len(imports) > 0 {
-		importsContent, err = c.Resolver.Resolve(imports)
+	if len(spec.Imports) > 0 {
+		importsContent, err = c.Resolver.Resolve(spec.Imports)
 		if err != nil {
 			return "", err
 		}
 	}
 
 	if opts.Debug {
-		fmt.Printf("[DEBUG] Resolved imports: %v\n", c.Resolver.GetResolutionOrder())
-		fmt.Printf("[DEBUG] Imports content length: %d chars\n", len(importsContent))
+		fmt.Printf("[DEBUG] spec file: %s\n", specFile)
+		fmt.Printf("[DEBUG] resolved imports: %v\n", c.Resolver.GetResolutionOrder())
+		fmt.Printf("[DEBUG] imports content length: %d chars\n", len(importsContent))
 	}
 
-	// Extract other sections
-	context := make(map[string]interface{})
-	if ctx, ok := spec["context"].(map[string]interface{}); ok {
-		context = ctx
+	outputDir := opts.OutputDir
+	if outputDir == "" {
+		base := filepath.Base(specFile)
+		// strip .spec.promptc or any extension
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		name = strings.TrimSuffix(name, ".spec")
+		outputDir = filepath.Join(filepath.Dir(specFile), name)
 	}
 
-	var features []interface{}
-	if feat, ok := spec["features"].([]interface{}); ok {
-		features = feat
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 	}
 
-	var constraints []interface{}
-	if cons, ok := spec["constraints"].([]interface{}); ok {
-		constraints = cons
+	fmtSpec := formatter.Spec{
+		Context:     spec.Context,
+		Features:    spec.Features,
+		Constraints: spec.Constraints,
+	}
+	meta := formatter.FormatterMeta{
+		SpecFile:   filepath.Base(specFile),
+		Version:    Version,
+		CompiledAt: time.Now(),
+	}
+	output := formatter.Format(fmtSpec, importsContent, meta)
+
+	outPath := filepath.Join(outputDir, "instructions.promptc")
+	if err := os.WriteFile(outPath, []byte(output), 0644); err != nil {
+		return "", fmt.Errorf("failed to write output file: %w", err)
 	}
 
-	// Get formatter and compile
-	formatter, _ := targets.GetFormatter(opts.Target)
-	compiled := formatter(importsContent, context, features, constraints)
-
-	return compiled, nil
+	return outPath, nil
 }
 
-func (c *Compiler) loadSpec(promptFile string) (map[string]interface{}, error) {
-	// Check if file exists and get file info
-	fileInfo, err := os.Stat(promptFile)
+// ParseSpec parses a spec file and returns the ParsedSpec without compiling.
+// Used by builder to access resources and build config.
+func (c *Compiler) ParseSpec(specFile string) (*ParsedSpec, error) {
+	raw, err := c.loadSpec(specFile)
+	if err != nil {
+		return nil, err
+	}
+	spec := parseSpec(raw)
+	return &spec, nil
+}
+
+func (c *Compiler) loadSpec(specFile string) (map[string]interface{}, error) {
+	info, err := os.Stat(specFile)
 	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("prompt file not found: %s", promptFile)
+		return nil, fmt.Errorf("spec file not found: %s", specFile)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat prompt file: %w", err)
+		return nil, fmt.Errorf("failed to stat spec file: %w", err)
 	}
 
-	// Prevent YAML bombs and memory exhaustion with file size limit
-	const maxPromptFileSize = 1 * 1024 * 1024 // 1MB limit for .prompt files
-	if fileInfo.Size() > maxPromptFileSize {
-		return nil, fmt.Errorf("prompt file too large: %d bytes (max %d bytes)", fileInfo.Size(), maxPromptFileSize)
+	const maxSize = 1 * 1024 * 1024 // 1MB
+	if info.Size() > maxSize {
+		return nil, fmt.Errorf("spec file too large: %d bytes (max %d bytes)", info.Size(), maxSize)
 	}
 
-	// Read file
-	content, err := os.ReadFile(promptFile)
+	content, err := os.ReadFile(specFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read prompt file: %w", err)
+		return nil, fmt.Errorf("failed to read spec file: %w", err)
 	}
 
-	// Parse YAML
-	var spec map[string]interface{}
-	if err := yaml.Unmarshal(content, &spec); err != nil {
-		return nil, fmt.Errorf("invalid YAML in %s: %w", promptFile, err)
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(content, &raw); err != nil {
+		return nil, fmt.Errorf("invalid YAML in %s: %w", specFile, err)
 	}
-
-	if spec == nil {
-		spec = make(map[string]interface{})
+	if raw == nil {
+		raw = make(map[string]interface{})
 	}
-
-	return spec, nil
+	return raw, nil
 }
 
-// Template represents a project template
+// parseSpec converts the raw YAML map into a structured ParsedSpec.
+func parseSpec(raw map[string]interface{}) ParsedSpec {
+	spec := ParsedSpec{
+		Context: make(map[string]interface{}),
+	}
+
+	if v, ok := raw["imports"].([]interface{}); ok {
+		for _, imp := range v {
+			if s, ok := imp.(string); ok {
+				spec.Imports = append(spec.Imports, s)
+			}
+		}
+	}
+
+	if v, ok := raw["context"].(map[string]interface{}); ok {
+		spec.Context = v
+	}
+
+	if v, ok := raw["features"].([]interface{}); ok {
+		spec.Features = v
+	}
+
+	if v, ok := raw["constraints"].([]interface{}); ok {
+		spec.Constraints = v
+	}
+
+	if v, ok := raw["resources"].([]interface{}); ok {
+		for _, item := range v {
+			m, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			r := SpecResource{}
+			if s, ok := m["name"].(string); ok {
+				r.Name = s
+			}
+			if s, ok := m["url"].(string); ok {
+				r.URL = s
+			}
+			if s, ok := m["git"].(string); ok {
+				r.Git = s
+			}
+			if s, ok := m["ref"].(string); ok {
+				r.Ref = s
+			}
+			if s, ok := m["path"].(string); ok {
+				r.Path = s
+			}
+			spec.Resources = append(spec.Resources, r)
+		}
+	}
+
+	if bRaw, ok := raw["build"].(map[string]interface{}); ok {
+		build := &SpecBuild{}
+		if aRaw, ok := bRaw["agent"].(map[string]interface{}); ok {
+			build.Agent.Command, _ = aRaw["command"].(string)
+			if argsRaw, ok := aRaw["args"].([]interface{}); ok {
+				for _, a := range argsRaw {
+					if s, ok := a.(string); ok {
+						build.Agent.Args = append(build.Agent.Args, s)
+					}
+				}
+			}
+		}
+		if sRaw, ok := bRaw["sandbox"].(map[string]interface{}); ok {
+			build.Sandbox.Type, _ = sRaw["type"].(string)
+			build.Sandbox.Image, _ = sRaw["image"].(string)
+		}
+		spec.Build = build
+	}
+
+	return spec
+}
+
+// Template represents a project template.
 type Template struct {
 	Name    string
 	Content string
 }
 
-// GetTemplates returns available project templates
+// GetTemplates returns available project templates.
 func GetTemplates() map[string]string {
 	return map[string]string{
-		"basic": `# Basic prompt template
+		"basic": `# Basic project template
 imports:
   - constraints.code_quality
 
 context:
-  language: python
-  framework: ""
+  language: go
 
 features:
   - feature_name: "Description of the feature"
@@ -182,10 +294,10 @@ imports:
   - constraints.code_quality
 
 context:
-  language: python
-  framework: fastapi
+  language: go
+  framework: fiber
   database: postgresql
-  testing: pytest
+  testing: testify
 
 features:
   - api_endpoint: "Description of your API endpoint"
@@ -201,9 +313,8 @@ imports:
   - constraints.code_quality
 
 context:
-  language: python
-  framework: click
-  testing: pytest
+  language: go
+  testing: testify
 
 features:
   - cli_command: "Description of your CLI command"
@@ -216,33 +327,25 @@ constraints:
 	}
 }
 
-// InitProject initializes a new .prompt file from a template
+// InitProject creates a new .spec.promptc file from a template.
 func InitProject(name, templateName string) error {
 	templates := GetTemplates()
 	content, ok := templates[templateName]
 	if !ok {
-		return fmt.Errorf("unknown template '%s'. Available: %s",
-			templateName, strings.Join(getTemplateNames(), ", "))
+		names := make([]string, 0, len(templates))
+		for n := range templates {
+			names = append(names, n)
+		}
+		return fmt.Errorf("unknown template %q. Available: %s",
+			templateName, strings.Join(names, ", "))
 	}
 
-	// Check if file already exists
 	if _, err := os.Stat(name); err == nil {
 		return fmt.Errorf("file %s already exists", name)
 	}
 
-	// Write file
 	if err := os.WriteFile(name, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
-
 	return nil
-}
-
-func getTemplateNames() []string {
-	templates := GetTemplates()
-	names := make([]string, 0, len(templates))
-	for name := range templates {
-		names = append(names, name)
-	}
-	return names
 }

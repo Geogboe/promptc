@@ -1,191 +1,237 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
+	"github.com/Geogboe/promptc/internal/builder"
 	"github.com/Geogboe/promptc/internal/compiler"
 	"github.com/Geogboe/promptc/internal/library"
-	"github.com/Geogboe/promptc/internal/targets"
 	"github.com/spf13/cobra"
 )
 
-var version = "0.2.0"
+// version is injected at build time via -ldflags "-X main.version=..."
+var version = "dev"
 
 func main() {
-	rootCmd := &cobra.Command{
-		Use:   "promptc",
-		Short: "Prompt compiler for agentic programming",
-		Long:  `Compile LLM instructions into different formats. Manage reusable prompt libraries.`,
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := newRootCmd().ExecuteContext(ctx); err != nil {
+		os.Exit(1)
 	}
+}
 
-	rootCmd.Version = version
+func newRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:     "promptc",
+		Short:   "Prompt compiler for agentic programming",
+		Long:    "Compile .spec.promptc files into agent instructions. Manage reusable prompt libraries.",
+		Version: version,
+	}
+	compiler.Version = version
 
-	// Compile command
-	var compileTarget string
-	var compileOutput string
-	var compileDebug bool
-	var compileNoValidate bool
+	root.AddCommand(
+		newValidateCmd(),
+		newCompileCmd(),
+		newBuildCmd(),
+		newListCmd(),
+		newInitCmd(),
+	)
+	return root
+}
 
-	compileCmd := &cobra.Command{
-		Use:   "compile <input.prompt>",
-		Short: "Compile a .prompt file to target format",
+// ── validate ──────────────────────────────────────────────────────────────────
+
+func newValidateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "validate <spec.spec.promptc>",
+		Short: "Validate a .spec.promptc file",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputPath := args[0]
+			specFile := args[0]
+			comp := compiler.NewCompiler(dirOf(specFile))
 
-			// Determine project directory
-			projectDir := filepath.Dir(inputPath)
-			if projectDir == "." {
-				var err error
-				projectDir, err = os.Getwd()
-				if err != nil {
-					return fmt.Errorf("failed to get working directory: %w", err)
-				}
+			// Compile with SkipValidate=false writes output; we only want validation.
+			// Re-use ParseSpec + Validate directly via a no-output path.
+			_, err := comp.Compile(specFile, &compiler.CompileOptions{
+				OutputDir:    os.TempDir(), // discard output
+				SkipValidate: false,
+			})
+			if err != nil {
+				// Print validation errors cleanly
+				fmt.Fprintln(os.Stderr, err.Error())
+				return fmt.Errorf("spec is invalid")
 			}
+			fmt.Printf("✓ %s is valid\n", filepath.Base(specFile))
+			return nil
+		},
+	}
+}
 
-			// Initialize compiler
-			comp := compiler.NewCompiler(projectDir)
+// ── compile ───────────────────────────────────────────────────────────────────
 
-			// Compile
-			if compileDebug {
-				fmt.Printf("[DEBUG] Input file: %s\n", inputPath)
-				fmt.Printf("[DEBUG] Project dir: %s\n", projectDir)
-				fmt.Printf("[DEBUG] Target: %s\n", compileTarget)
-			}
+func newCompileCmd() *cobra.Command {
+	var outputDir string
+	var noValidate bool
+	var debug bool
 
-			result, err := comp.Compile(inputPath, &compiler.CompileOptions{
-				Target:   compileTarget,
-				Debug:    compileDebug,
-				Validate: !compileNoValidate,
+	cmd := &cobra.Command{
+		Use:   "compile <spec.spec.promptc>",
+		Short: "Compile a spec to instructions.promptc",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			specFile := args[0]
+			comp := compiler.NewCompiler(dirOf(specFile))
+
+			outPath, err := comp.Compile(specFile, &compiler.CompileOptions{
+				OutputDir:    outputDir,
+				SkipValidate: noValidate,
+				Debug:        debug,
 			})
 			if err != nil {
 				return err
 			}
-
-			// Output
-			if compileOutput != "" {
-				// Create parent directories if needed
-				if err := os.MkdirAll(filepath.Dir(compileOutput), 0755); err != nil {
-					return fmt.Errorf("failed to create output directory: %w", err)
-				}
-
-				if err := os.WriteFile(compileOutput, []byte(result), 0644); err != nil {
-					return fmt.Errorf("failed to write output file: %w", err)
-				}
-
-				fmt.Printf("Compiled prompt written to: %s\n", compileOutput)
-			} else {
-				fmt.Println(result)
-			}
-
+			fmt.Printf("✓ Compiled to %s\n", outPath)
 			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "Output directory (default: ./<specname>/)")
+	cmd.Flags().BoolVar(&noValidate, "no-validate", false, "Skip validation")
+	cmd.Flags().BoolVar(&debug, "debug", false, "Show debug information")
+	return cmd
+}
 
-	compileCmd.Flags().StringVarP(&compileTarget, "target", "t", "raw", "Target format (raw, claude, cursor, aider, copilot)")
-	compileCmd.Flags().StringVarP(&compileOutput, "output", "o", "", "Output file (default: stdout)")
-	compileCmd.Flags().BoolVar(&compileDebug, "debug", false, "Show debug information")
-	compileCmd.Flags().BoolVar(&compileNoValidate, "no-validate", false, "Skip validation")
+// ── build ─────────────────────────────────────────────────────────────────────
 
-	// List command
-	var listVerbose bool
+func newBuildCmd() *cobra.Command {
+	var outputDir string
+	var noValidate bool
+	var sandboxOverride string
+	var dryRun bool
 
-	listCmd := &cobra.Command{
+	cmd := &cobra.Command{
+		Use:   "build <spec.spec.promptc>",
+		Short: "Compile, fetch resources, and run agent in sandbox",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			specFile := args[0]
+			return builder.Build(cmd.Context(), specFile, builder.BuildOptions{
+				OutputDir:      outputDir,
+				SkipValidate:   noValidate,
+				SandboxOverride: sandboxOverride,
+				DryRun:         dryRun,
+			})
+		},
+	}
+	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "Output directory")
+	cmd.Flags().BoolVar(&noValidate, "no-validate", false, "Skip validation")
+	cmd.Flags().StringVar(&sandboxOverride, "sandbox", "", "Override sandbox type (docker, bubblewrap, none)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Compile and fetch but do not run the agent")
+	return cmd
+}
+
+// ── list ──────────────────────────────────────────────────────────────────────
+
+func newListCmd() *cobra.Command {
+	var verbose bool
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all available prompt libraries",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			manager := library.NewManager("")
-			libs := manager.ListLibraries()
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get working directory: %w", err)
+			}
+			mgr := library.NewManager(cwd)
+			libs := mgr.ListLibraries()
 
 			fmt.Println("Available Prompt Libraries")
 			fmt.Println(strings.Repeat("=", 50))
 			fmt.Println()
 
-			if len(libs.BuiltIn) > 0 {
-				fmt.Println("BUILT-IN:")
-				for _, lib := range libs.BuiltIn {
-					if listVerbose {
-						// Try to get first line as description
-						content, err := manager.Resolve(lib)
+			printLibs := func(label string, names []string) {
+				if len(names) == 0 {
+					return
+				}
+				fmt.Printf("%s:\n", label)
+				for _, name := range names {
+					if verbose {
+						content, err := mgr.Resolve(name)
 						if err == nil {
-							lines := strings.Split(content, "\n")
-							if len(lines) > 0 {
-								firstLine := strings.TrimPrefix(lines[0], "# ")
-								fmt.Printf("  - %s\n", lib)
-								fmt.Printf("    %s\n", firstLine)
-								continue
-							}
+							lines := strings.SplitN(content, "\n", 2)
+							fmt.Printf("  - %s\n", name)
+							fmt.Printf("    %s\n", strings.TrimPrefix(strings.TrimSpace(lines[0]), "# "))
+							continue
 						}
 					}
-					fmt.Printf("  - %s\n", lib)
+					fmt.Printf("  - %s\n", name)
 				}
 				fmt.Println()
 			}
 
-			if len(libs.Global) > 0 {
-				fmt.Println("GLOBAL:")
-				for _, lib := range libs.Global {
-					fmt.Printf("  - %s\n", lib)
-				}
-				fmt.Println()
-			}
+			printLibs("BUILT-IN", libs.BuiltIn)
+			printLibs("GLOBAL", libs.Global)
+			printLibs("PROJECT", libs.Project)
 
-			if len(libs.Project) > 0 {
-				fmt.Println("PROJECT:")
-				for _, lib := range libs.Project {
-					fmt.Printf("  - %s\n", lib)
-				}
-				fmt.Println()
-			}
-
-			if len(libs.BuiltIn) == 0 && len(libs.Global) == 0 && len(libs.Project) == 0 {
+			if len(libs.BuiltIn)+len(libs.Global)+len(libs.Project) == 0 {
 				fmt.Println("No libraries found.")
 			}
-
 			return nil
 		},
 	}
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show library descriptions")
+	return cmd
+}
 
-	listCmd.Flags().BoolVarP(&listVerbose, "verbose", "v", false, "Show detailed information")
+// ── init ──────────────────────────────────────────────────────────────────────
 
-	// Init command
-	var initTemplate string
+func newInitCmd() *cobra.Command {
+	var templateName string
 
-	initCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "init [name]",
-		Short: "Initialize a new .prompt file",
+		Short: "Create a new .spec.promptc file from a template",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := "project.prompt"
+			name := "project.spec.promptc"
 			if len(args) > 0 {
 				name = args[0]
+				if !strings.HasSuffix(name, ".spec.promptc") {
+					name += ".spec.promptc"
+				}
 			}
 
-			if err := compiler.InitProject(name, initTemplate); err != nil {
+			if err := compiler.InitProject(name, templateName); err != nil {
 				return err
 			}
 
 			fmt.Printf("Created %s\n\n", name)
 			fmt.Println("Next steps:")
-			fmt.Printf("  1. Edit %s to customize your project\n", name)
-			fmt.Printf("  2. Compile with: promptc compile %s --target=claude\n\n", name)
-			fmt.Printf("Available targets: %s\n", strings.Join(targets.GetSupportedTargets(), ", "))
-
+			fmt.Printf("  1. Edit %s to customise your project\n", name)
+			fmt.Printf("  2. Validate: promptc validate %s\n", name)
+			fmt.Printf("  3. Compile:  promptc compile  %s\n", name)
+			fmt.Printf("  4. Build:    promptc build    %s --sandbox none --dry-run\n", name)
 			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&templateName, "template", "t", "basic", "Template (basic, web-api, cli-tool)")
+	return cmd
+}
 
-	initCmd.Flags().StringVarP(&initTemplate, "template", "t", "basic", "Template to use (basic, web-api, cli-tool)")
-
-	// Add commands
-	rootCmd.AddCommand(compileCmd)
-	rootCmd.AddCommand(listCmd)
-	rootCmd.AddCommand(initCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+// dirOf returns the directory of a file path, resolving to CWD for bare filenames.
+func dirOf(path string) string {
+	dir := filepath.Dir(path)
+	if dir == "." {
+		if cwd, err := os.Getwd(); err == nil {
+			return cwd
+		}
 	}
+	return dir
 }

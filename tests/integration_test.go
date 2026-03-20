@@ -10,166 +10,138 @@ import (
 	"github.com/Geogboe/promptc/internal/library"
 )
 
-// TestEndToEndWorkflow tests the complete workflow from init to compile
+// TestEndToEndWorkflow tests the complete workflow from init to compile.
 func TestEndToEndWorkflow(t *testing.T) {
-	tmpDir := t.TempDir()
+	dir := t.TempDir()
 
-	// Initialize a project
-	promptFile := filepath.Join(tmpDir, "myapp.prompt")
-	err := compiler.InitProject(promptFile, "web-api")
-	if err != nil {
+	// Init a project
+	specFile := filepath.Join(dir, "myapp.spec.promptc")
+	if err := compiler.InitProject(specFile, "web-api"); err != nil {
 		t.Fatalf("InitProject failed: %v", err)
 	}
-
-	// Verify file was created
-	if _, err := os.Stat(promptFile); os.IsNotExist(err) {
-		t.Fatal("Prompt file was not created")
+	if _, err := os.Stat(specFile); os.IsNotExist(err) {
+		t.Fatal("spec file was not created")
 	}
 
-	// Compile to all targets
-	comp := compiler.NewCompiler(tmpDir)
-	targets := []string{"raw", "claude", "cursor", "aider", "copilot"}
+	// Compile it
+	comp := compiler.NewCompiler(dir)
+	outPath, err := comp.Compile(specFile, &compiler.CompileOptions{SkipValidate: false})
+	if err != nil {
+		t.Fatalf("Compile failed: %v", err)
+	}
+	if outPath == "" {
+		t.Fatal("Compile returned empty output path")
+	}
 
-	for _, target := range targets {
-		result, err := comp.Compile(promptFile, &compiler.CompileOptions{
-			Target:   target,
-			Validate: true,
-		})
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	out := string(data)
 
-		if err != nil {
-			t.Fatalf("Compilation to %s failed: %v", target, err)
-		}
-
-		if result == "" {
-			t.Errorf("Compilation to %s produced empty result", target)
-		}
-
-		// Verify the result contains expected content
-		if !strings.Contains(result, "REST API") {
-			t.Errorf("Result for %s missing REST API content", target)
-		}
+	if !strings.Contains(out, "# Project Instructions") {
+		t.Error("output missing project instructions header")
+	}
+	if !strings.Contains(out, "REST API") {
+		t.Error("output missing REST API content from imports")
 	}
 }
 
-// TestCustomLibraryResolution tests custom library resolution
+// TestCustomLibraryResolution tests custom library resolution.
 func TestCustomLibraryResolution(t *testing.T) {
-	tmpDir := t.TempDir()
+	dir := t.TempDir()
 
-	// Create project prompts directory
-	promptsDir := filepath.Join(tmpDir, "prompts")
+	promptsDir := filepath.Join(dir, "prompts")
 	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		t.Fatalf("Failed to create prompts dir: %v", err)
+		t.Fatal(err)
 	}
 
-	// Create a custom library
 	customLib := filepath.Join(promptsDir, "custom.prompt")
 	customContent := "# Custom Library\nThis is a custom prompt library."
 	if err := os.WriteFile(customLib, []byte(customContent), 0644); err != nil {
-		t.Fatalf("Failed to create custom library: %v", err)
+		t.Fatal(err)
 	}
 
-	// Create a prompt file that imports the custom library
-	promptFile := filepath.Join(tmpDir, "test.prompt")
-	promptContent := `imports:
+	specFile := filepath.Join(dir, "test.spec.promptc")
+	specContent := `imports:
   - custom
 
 features:
   - test: "Test feature"
 `
-	if err := os.WriteFile(promptFile, []byte(promptContent), 0644); err != nil {
-		t.Fatalf("Failed to create prompt file: %v", err)
+	if err := os.WriteFile(specFile, []byte(specContent), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	// Compile and verify custom library is included
-	comp := compiler.NewCompiler(tmpDir)
-	result, err := comp.Compile(promptFile, &compiler.CompileOptions{
-		Target:   "raw",
-		Validate: true,
-	})
-
+	comp := compiler.NewCompiler(dir)
+	outPath, err := comp.Compile(specFile, &compiler.CompileOptions{SkipValidate: false})
 	if err != nil {
-		t.Fatalf("Compilation failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
-	if !strings.Contains(result, "Custom Library") {
-		t.Error("Custom library content not found in result")
+	data, _ := os.ReadFile(outPath)
+	if !strings.Contains(string(data), "Custom Library") {
+		t.Error("custom library content not found in output")
 	}
 }
 
-// TestInvalidPromptFile tests handling of invalid prompt files
-func TestInvalidPromptFile(t *testing.T) {
-	tmpDir := t.TempDir()
+// TestInvalidSpecFile tests handling of invalid spec files.
+func TestInvalidSpecFile(t *testing.T) {
+	dir := t.TempDir()
 
-	tests := []struct{
+	tests := []struct {
 		name    string
 		content string
 	}{
 		{
-			name: "invalid YAML",
-			content: `
-imports:
-  - test
-context:
-  invalid yaml here: [
-`,
+			name:    "invalid YAML",
+			content: "imports:\n  - test\ncontext:\n  invalid yaml here: [",
 		},
 		{
-			name: "empty features",
-			content: `features: []`,
+			name:    "empty features",
+			content: "features: []",
 		},
 		{
-			name: "invalid import name",
-			content: `imports:
-  - "../../../etc/passwd"
-`,
+			name:    "invalid import name",
+			content: "imports:\n  - \"../../../etc/passwd\"\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			promptFile := filepath.Join(tmpDir, tt.name+".prompt")
-			if err := os.WriteFile(promptFile, []byte(tt.content), 0644); err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
+			specFile := filepath.Join(dir, tt.name+".spec.promptc")
+			if err := os.WriteFile(specFile, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
 			}
 
-			comp := compiler.NewCompiler(tmpDir)
-			_, err := comp.Compile(promptFile, &compiler.CompileOptions{
-				Target:   "raw",
-				Validate: true,
-			})
-
+			comp := compiler.NewCompiler(dir)
+			_, err := comp.Compile(specFile, &compiler.CompileOptions{SkipValidate: false})
 			if err == nil {
-				t.Errorf("Expected error for %s, got none", tt.name)
+				t.Errorf("expected error for %s, got none", tt.name)
 			}
 		})
 	}
 }
 
-// TestLibraryListingIntegration tests library listing across all sources
+// TestLibraryListingIntegration tests library listing across all sources.
 func TestLibraryListingIntegration(t *testing.T) {
-	tmpDir := t.TempDir()
+	dir := t.TempDir()
 
-	// Create project-local library
-	promptsDir := filepath.Join(tmpDir, "prompts/mylibs")
+	promptsDir := filepath.Join(dir, "prompts", "mylibs")
 	if err := os.MkdirAll(promptsDir, 0755); err != nil {
-		t.Fatalf("Failed to create prompts dir: %v", err)
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(promptsDir, "project.prompt"), []byte("# Project Library"), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	projectLib := filepath.Join(promptsDir, "project.prompt")
-	if err := os.WriteFile(projectLib, []byte("# Project Library"), 0644); err != nil {
-		t.Fatalf("Failed to create project library: %v", err)
-	}
-
-	// List libraries
-	mgr := library.NewManager(tmpDir)
+	mgr := library.NewManager(dir)
 	libs := mgr.ListLibraries()
 
-	// Should have built-in libraries
 	if len(libs.BuiltIn) == 0 {
-		t.Error("No built-in libraries found")
+		t.Error("no built-in libraries found")
 	}
 
-	// Should find our project library
 	found := false
 	for _, lib := range libs.Project {
 		if strings.Contains(lib, "project") {
@@ -177,18 +149,17 @@ func TestLibraryListingIntegration(t *testing.T) {
 			break
 		}
 	}
-
 	if !found {
-		t.Errorf("Project library not found. Got: %v", libs.Project)
+		t.Errorf("project library not found. Got: %v", libs.Project)
 	}
 }
 
-// TestCompilationWithMultipleImports tests complex import scenarios
+// TestCompilationWithMultipleImports tests complex import scenarios.
 func TestCompilationWithMultipleImports(t *testing.T) {
-	tmpDir := t.TempDir()
+	dir := t.TempDir()
 
-	promptFile := filepath.Join(tmpDir, "complex.prompt")
-	promptContent := `imports:
+	specFile := filepath.Join(dir, "complex.spec.promptc")
+	specContent := `imports:
   - patterns.rest_api
   - patterns.testing
   - patterns.database
@@ -211,90 +182,62 @@ constraints:
   - comprehensive_test_coverage
   - proper_error_handling
 `
-
-	if err := os.WriteFile(promptFile, []byte(promptContent), 0644); err != nil {
-		t.Fatalf("Failed to create prompt file: %v", err)
+	if err := os.WriteFile(specFile, []byte(specContent), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	comp := compiler.NewCompiler(tmpDir)
-	result, err := comp.Compile(promptFile, &compiler.CompileOptions{
-		Target:   "claude",
-		Validate: true,
-		Debug:    false,
-	})
-
+	comp := compiler.NewCompiler(dir)
+	outPath, err := comp.Compile(specFile, nil)
 	if err != nil {
-		t.Fatalf("Compilation failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
-	// Verify all imports are included
-	requiredContent := []string{
-		"REST API",
-		"Testing",
-		"Database",
-		"Security",
-		"Code Quality",
-	}
+	data, _ := os.ReadFile(outPath)
+	out := string(data)
 
-	for _, required := range requiredContent {
-		if !strings.Contains(result, required) {
-			t.Errorf("Result missing required content: %s", required)
+	for _, required := range []string{
+		"REST API", "Testing", "Database", "Security", "Code Quality",
+	} {
+		if !strings.Contains(out, required) {
+			t.Errorf("output missing required content: %s", required)
 		}
 	}
 
-	// Verify context is included
-	if !strings.Contains(result, "go") {
-		t.Error("Result missing context")
-	}
-
-	// Verify features are included
-	if !strings.Contains(result, "User authentication") {
-		t.Error("Result missing features")
+	if !strings.Contains(out, "User authentication with JWT") {
+		t.Error("output missing feature content")
 	}
 }
 
-// TestOutputToFile tests writing compilation results to files
-func TestOutputToFile(t *testing.T) {
-	tmpDir := t.TempDir()
+// TestOutputFileCreated tests that output file is written correctly.
+func TestOutputFileCreated(t *testing.T) {
+	dir := t.TempDir()
 
-	// Create a simple prompt file
-	promptFile := filepath.Join(tmpDir, "test.prompt")
-	promptContent := `features:
+	specFile := filepath.Join(dir, "test.spec.promptc")
+	specContent := `features:
   - test: "Test feature"
 `
-	if err := os.WriteFile(promptFile, []byte(promptContent), 0644); err != nil {
-		t.Fatalf("Failed to create prompt file: %v", err)
+	if err := os.WriteFile(specFile, []byte(specContent), 0644); err != nil {
+		t.Fatal(err)
 	}
 
-	comp := compiler.NewCompiler(tmpDir)
-
-	// Compile and write to file
-	result, err := comp.Compile(promptFile, &compiler.CompileOptions{
-		Target:   "claude",
-		Validate: true,
-	})
-
+	outDir := filepath.Join(dir, "output")
+	comp := compiler.NewCompiler(dir)
+	outPath, err := comp.Compile(specFile, &compiler.CompileOptions{OutputDir: outDir})
 	if err != nil {
-		t.Fatalf("Compilation failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
-	// Write to output file
-	outputFile := filepath.Join(tmpDir, ".claude/instructions.md")
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
-		t.Fatalf("Failed to create output directory: %v", err)
+	// Verify the output path is as expected
+	expected := filepath.Join(outDir, "instructions.promptc")
+	if outPath != expected {
+		t.Errorf("output path = %q, want %q", outPath, expected)
 	}
 
-	if err := os.WriteFile(outputFile, []byte(result), 0644); err != nil {
-		t.Fatalf("Failed to write output file: %v", err)
-	}
-
-	// Verify file was written correctly
-	content, err := os.ReadFile(outputFile)
+	data, err := os.ReadFile(outPath)
 	if err != nil {
-		t.Fatalf("Failed to read output file: %v", err)
+		t.Fatalf("output file not created: %v", err)
 	}
-
-	if string(content) != result {
-		t.Error("Output file content doesn't match compilation result")
+	if len(data) == 0 {
+		t.Error("output file is empty")
 	}
 }

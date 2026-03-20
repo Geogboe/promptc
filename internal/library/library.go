@@ -78,18 +78,21 @@ func (m *Manager) Resolve(importName string) (string, error) {
 	}
 
 	// Convert dot notation to path (patterns.rest_api -> patterns/rest_api.prompt)
+	// Use forward slashes — embed.FS requires them on all platforms.
+	relativePathEmbed := strings.ReplaceAll(importName, ".", "/") + ".prompt"
+	// Use OS separator for real filesystem lookups.
 	relativePath := strings.ReplaceAll(importName, ".", string(filepath.Separator)) + ".prompt"
 
 	// Try each search path
 	for _, searchPath := range m.SearchPaths {
 		if searchPath == "defaults" {
-			// Try embedded files
-			content, err := m.loadEmbedded(relativePath)
+			// Try embedded files (must use forward-slash path)
+			content, err := m.loadEmbedded(relativePathEmbed)
 			if err == nil {
 				return content, nil
 			}
 		} else {
-			// Try filesystem with security checks
+			// Try filesystem with security checks (use OS-native path)
 			content, err := m.loadFromFilesystem(searchPath, relativePath)
 			if err == nil {
 				return content, nil
@@ -191,8 +194,8 @@ func (m *Manager) loadFromFilesystem(searchPath, relativePath string) (string, e
 }
 
 func (m *Manager) loadEmbedded(relativePath string) (string, error) {
-	path := filepath.Join("defaults", relativePath)
-	// Embedded FS is already safe from path traversal
+	// embed.FS requires forward slashes on all platforms; relativePath must use "/".
+	path := "defaults/" + relativePath
 	content, err := defaultLibraries.ReadFile(path)
 	if err != nil {
 		return "", err

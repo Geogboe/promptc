@@ -1,0 +1,30 @@
+imports:
+  - patterns.rest_api
+  - constraints.security
+
+context:
+  language: go
+  framework: fiber
+  database: postgresql
+
+features:
+  - find_coffee_shops: "Find nearby independent coffee shops"
+  - save_favorites: "Save favourite locations"
+  - view_history: "View search history"
+
+constraints:
+  - no_hardcoded_secrets
+  - comprehensive_error_handling
+
+resources:
+  - url: "https://pkg.go.dev/github.com/gofiber/fiber/v2"
+    name: fiber-docs
+
+build:
+  agent:
+    command: claude
+    args:
+      - "--dangerously-skip-permissions"
+  sandbox:
+    type: docker
+    image: "ubuntu:22.04"
