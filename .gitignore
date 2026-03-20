@@ -27,3 +27,9 @@ Thumbs.db
 # Local test files
 *.local.prompt
 .test-*
+
+# Local agent tooling state
+.agent/
+.agents/
+.claude/
+skills-lock.json
