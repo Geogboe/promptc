@@ -8,6 +8,12 @@ import (
 	"github.com/Geogboe/promptc/internal/progress"
 )
 
+// getterMu serializes all go-getter calls.
+// go-getter's Configure() mutates globally registered getter singletons
+// (FileGetter, GitGetter, etc.) via SetClient(), making concurrent Get()
+// calls unsafe. Fetches are I/O-bound so this has minimal practical impact.
+var getterMu sync.Mutex
+
 // FetchAll fetches all resources concurrently into destDir.
 // Collects all errors so partial failures are visible.
 func FetchAll(ctx context.Context, resources []Resource, destDir string) []error {
@@ -52,11 +58,13 @@ func fetchAll(ctx context.Context, resources []Resource, destDir string, noCache
 			progress.Step("fetching %s (%s)", res.Name, sourceLabel(res))
 
 			var err error
+			getterMu.Lock()
 			if res.URL != "" {
 				err = FetchHTTP(ctx, res, destDir)
 			} else {
 				err = FetchGit(ctx, res, destDir)
 			}
+			getterMu.Unlock()
 
 			if err != nil {
 				progress.Fail("fetch %s: %v", res.Name, err)
