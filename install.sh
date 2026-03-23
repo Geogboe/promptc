@@ -46,7 +46,7 @@ fetch_release_json() {
     RELEASE_URL="${API_BASE}/${REPO}/releases/latest"
   fi
 
-  echo "Fetching release metadata..."
+  echo "Fetching release metadata..." >&2
   curl -fsSL \
     -H "Accept: application/vnd.github+json" \
     -H "User-Agent: ${USER_AGENT}" \
