@@ -69,7 +69,7 @@ func TestFormat_ContextSorted(t *testing.T) {
 	if databaseIndex == -1 || frameworkIndex == -1 || languageIndex == -1 {
 		t.Fatalf("missing expected context entries in output:\n%s", result)
 	}
-	if !(databaseIndex < frameworkIndex && frameworkIndex < languageIndex) {
+	if databaseIndex >= frameworkIndex || frameworkIndex >= languageIndex {
 		t.Fatalf("context entries are not sorted alphabetically:\n%s", result)
 	}
 }

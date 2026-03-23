@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -152,6 +153,21 @@ func checksumFile(name string, archive []byte) []byte {
 }
 
 func newReleaseServer(archiveName string, checksums []byte, archive []byte) *httptest.Server {
+	type asset struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	}
+	type release struct {
+		TagName string  `json:"tag_name"`
+		Assets  []asset `json:"assets"`
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic(err)
+	}
+	baseURL := "http://" + listener.Addr().String()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/downloads/"+archiveName, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(archive)
@@ -159,24 +175,24 @@ func newReleaseServer(archiveName string, checksums []byte, archive []byte) *htt
 	mux.HandleFunc("/downloads/checksums.txt", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(checksums)
 	})
-
-	var server *httptest.Server
 	mux.HandleFunc("/repos/test/repo/releases/tags/v1.2.3", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name": "v1.2.3",
-			"assets": []map[string]any{
+		_ = json.NewEncoder(w).Encode(release{
+			TagName: "v1.2.3",
+			Assets: []asset{
 				{
-					"name":                 archiveName,
-					"browser_download_url": server.URL + "/downloads/" + archiveName,
+					Name:               archiveName,
+					BrowserDownloadURL: baseURL + "/downloads/" + archiveName,
 				},
 				{
-					"name":                 "checksums.txt",
-					"browser_download_url": server.URL + "/downloads/checksums.txt",
+					Name:               "checksums.txt",
+					BrowserDownloadURL: baseURL + "/downloads/checksums.txt",
 				},
 			},
 		})
 	})
 
-	server = httptest.NewServer(mux)
+	server := httptest.NewUnstartedServer(mux)
+	server.Listener = listener
+	server.Start()
 	return server
 }
