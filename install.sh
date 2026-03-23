@@ -68,7 +68,7 @@ select_asset_field() {
   field="$3"
   description="$4"
 
-  if ! result="$(
+  result="$(
     printf '%s' "$json" | ASSET_REGEX="$regex" ASSET_FIELD="$field" perl -0ne '
       my $pattern = $ENV{ASSET_REGEX};
       my $field = $ENV{ASSET_FIELD};
@@ -87,9 +87,7 @@ select_asset_field() {
       }
       exit 1;
     '
-  )"; then
-    die "could not find a ${description} asset matching '${regex}'"
-  fi
+  )" || die "could not find a ${description} asset matching '${regex}'"
 
   printf '%s' "$result"
 }
