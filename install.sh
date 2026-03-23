@@ -73,13 +73,14 @@ select_asset_field() {
       my $pattern = $ENV{ASSET_REGEX};
       my $field = $ENV{ASSET_FIELD};
       while (/"name"\s*:\s*"([^"]+)".*?"browser_download_url"\s*:\s*"([^"]+)"/sg) {
-        if ($1 =~ /$pattern/) {
+        my ($name, $url) = ($1, $2);
+        if ($name =~ /$pattern/) {
           if ($field eq "name") {
-            print $1;
+            print $name;
             exit 0;
           }
           if ($field eq "url") {
-            print $2;
+            print $url;
             exit 0;
           }
           exit 2;
