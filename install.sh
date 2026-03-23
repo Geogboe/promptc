@@ -62,18 +62,27 @@ asset_count_from_json() {
   printf '%s' "$1" | perl -0ne 'print scalar(() = /"browser_download_url"\s*:/g), "\n"'
 }
 
-select_asset() {
+select_asset_field() {
   json="$1"
   regex="$2"
-  description="$3"
+  field="$3"
+  description="$4"
 
   if ! result="$(
-    printf '%s' "$json" | ASSET_REGEX="$regex" perl -0ne '
+    printf '%s' "$json" | ASSET_REGEX="$regex" ASSET_FIELD="$field" perl -0ne '
       my $pattern = $ENV{ASSET_REGEX};
+      my $field = $ENV{ASSET_FIELD};
       while (/"name"\s*:\s*"([^"]+)".*?"browser_download_url"\s*:\s*"([^"]+)"/sg) {
         if ($1 =~ /$pattern/) {
-          print "$1\n$2\n";
-          exit 0;
+          if ($field eq "name") {
+            print $1;
+            exit 0;
+          }
+          if ($field eq "url") {
+            print $2;
+            exit 0;
+          }
+          exit 2;
         }
       }
       exit 1;
@@ -100,13 +109,11 @@ trap 'rm -rf "${TMP}"' EXIT
 
 # ── Resolve release assets ────────────────────────────────────────────────────
 
-ARCHIVE_INFO="$(select_asset "${RELEASE_JSON}" "^${BINARY}_.+_${OS}_${ARCH}\.tar\.gz$" "archive")"
-ARCHIVE_NAME="$(printf '%s' "${ARCHIVE_INFO}" | sed -n '1p')"
-ARCHIVE_URL="$(printf '%s' "${ARCHIVE_INFO}" | sed -n '2p')"
+ARCHIVE_NAME="$(select_asset_field "${RELEASE_JSON}" "^${BINARY}_.+_${OS}_${ARCH}\.tar\.gz$" "name" "archive")"
+ARCHIVE_URL="$(select_asset_field "${RELEASE_JSON}" "^${BINARY}_.+_${OS}_${ARCH}\.tar\.gz$" "url" "archive")"
 
-CHECKSUMS_INFO="$(select_asset "${RELEASE_JSON}" '^checksums\.txt$' "checksum file")"
-CHECKSUMS_NAME="$(printf '%s' "${CHECKSUMS_INFO}" | sed -n '1p')"
-CHECKSUMS_URL="$(printf '%s' "${CHECKSUMS_INFO}" | sed -n '2p')"
+CHECKSUMS_NAME="$(select_asset_field "${RELEASE_JSON}" '^checksums\.txt$' "name" "checksum file")"
+CHECKSUMS_URL="$(select_asset_field "${RELEASE_JSON}" '^checksums\.txt$' "url" "checksum file")"
 
 # ── Download archive + checksums ─────────────────────────────────────────────
 
